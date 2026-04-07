@@ -84,6 +84,17 @@ export function MissionControl({ data, onResolve }: { data: MissionControlData; 
           <div className="p-4 space-y-3">
             <h3 className="font-medium text-gray-100">{incident.title}</h3>
             <p className="text-xs text-gray-400 leading-relaxed">{incident.description}</p>
+            {/* Triage Reasoning — extracted from triage trace output */}
+            {(() => {
+              const triageTrace = trc.find(t => t.agent_name === 'triage');
+              const reasoning = triageTrace?.output_summary?.match(/Confidence: [\d.]+\. (.+)/)?.[1];
+              return reasoning ? (
+                <div className="bg-gray-800 rounded-lg p-2.5">
+                  <p className="text-[10px] text-gray-500 uppercase mb-1 font-bold tracking-wider">AI Reasoning</p>
+                  <p className="text-xs text-amber-400/90 leading-relaxed">{reasoning}</p>
+                </div>
+              ) : null;
+            })()}
             <div className="flex flex-wrap gap-2 text-[10px]">
               {incident.component && (
                 <span className="bg-gray-800 text-gray-300 px-2 py-1 rounded">

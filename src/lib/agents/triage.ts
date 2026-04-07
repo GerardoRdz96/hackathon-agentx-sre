@@ -16,6 +16,7 @@ export interface TriageResult {
   component: string;
   type: string;
   confidence: number;
+  reasoning: string;
   imageAnalysis?: {
     description: string;
     error_indicators: string[];
@@ -55,11 +56,12 @@ export async function runTriageAgent(input: TriageInput): Promise<TriageResult> 
       component: classification.component,
       type: classification.type,
       confidence: classification.confidence,
+      reasoning: classification.reasoning || 'Classification based on incident description analysis.',
       ...(imageAnalysis && { imageAnalysis }),
     };
 
     const dur = performance.now() - agentStart;
-    endTrace(traceKey, `Severity: ${result.severity}, Component: ${result.component}, Type: ${result.type}`);
+    endTrace(traceKey, `Severity: ${result.severity}, Component: ${result.component}, Type: ${result.type}. Confidence: ${result.confidence}. ${result.reasoning}`);
     logAgentEnd(input.incidentId, 'triage', dur, `${result.severity}/${result.component}`);
     recordAgentDuration('triage', dur);
     return result;
