@@ -37,6 +37,7 @@ INCIDENT IN (text + screenshot)
 ```
 
 **Total pipeline: ~6-8 seconds** — a 91% reduction from manual triage.
+**Cost per incident: ~$0.01-0.02** (Haiku triage + Haiku routing ≈ 500 tokens, Sonnet analysis ≈ 2000 tokens). At 1,000 incidents/day: ~$15-20/day.
 
 ---
 
@@ -52,7 +53,7 @@ INCIDENT IN (text + screenshot)
 | **Mock Integrations** | Linear-style ticket creation, Slack/email notification simulation — ready to swap for real APIs |
 | **Resolution Flow** | Mark incidents resolved from the dashboard — reporter is notified automatically |
 | **Dark Mission Control UI** | 5 agent panels with severity badges, real-time trace timeline, incident history |
-| **Simulated E-Commerce** | 9 Medusa.js source files with realistic bugs + 200+ log entries for end-to-end testing |
+| **Simulated E-Commerce** | 9 Medusa.js source files with realistic bugs + 200+ log entries. Simulated data ensures **reproducible evaluation** — judges can run the full E2E flow without configuring external services. The adapter pattern means swapping to real Datadog/PagerDuty is a config change, not a rewrite |
 | **Dockerized** | Single `docker compose up` to run the full stack |
 
 ---

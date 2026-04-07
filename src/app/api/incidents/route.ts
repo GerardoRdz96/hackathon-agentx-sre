@@ -28,13 +28,18 @@ export async function POST(request: NextRequest) {
       imageFile = formData.get('image') as File | null;
     }
 
-    if (!title || !description) {
-      return NextResponse.json({ error: 'Title and description are required' }, { status: 400 });
+    if (!title?.trim() || !description?.trim()) {
+      return NextResponse.json({ error: 'Title and description are required and cannot be empty' }, { status: 400 });
+    }
+
+    // Validate reporter email format if provided
+    if (reporterEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reporterEmail)) {
+      reporterEmail = null; // Discard invalid email silently
     }
 
     // Sanitize inputs
-    const titleCheck = validateAndSanitize(title);
-    const descCheck = validateAndSanitize(description);
+    const titleCheck = validateAndSanitize(title.trim());
+    const descCheck = validateAndSanitize(description.trim());
 
     if (titleCheck.warnings.length > 0 || descCheck.warnings.length > 0) {
       console.warn('Input sanitization warnings:', [...titleCheck.warnings, ...descCheck.warnings]);

@@ -14,9 +14,8 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
-# Stage 3: Runner
+# Stage 3: Runner (minimal — no build tools needed)
 FROM node:20-alpine AS runner
-RUN apk add --no-cache python3 make g++
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
