@@ -15,11 +15,20 @@ export function MissionControl({ data, onResolve }: { data: MissionControlData; 
   const { incident, tickets: tix, traces: trc, notifications: notifs } = data;
   const router = useRouter();
   const [resolving, setResolving] = useState(false);
+  const [resolveToast, setResolveToast] = useState<string | null>(null);
 
   async function handleResolve() {
     setResolving(true);
     try {
       await fetch(`/api/incidents/${incident.id}/resolve`, { method: 'POST' });
+      // Show resolution toast with reporter info
+      const reporterEmail = incident.reporter_email;
+      setResolveToast(
+        reporterEmail
+          ? `Incident #${incident.id} resolved. Reporter notified at ${reporterEmail} via email.`
+          : `Incident #${incident.id} resolved. No reporter email on file.`
+      );
+      setTimeout(() => setResolveToast(null), 6000);
       router.refresh();
       onResolve?.();
     } catch {
@@ -53,6 +62,14 @@ export function MissionControl({ data, onResolve }: { data: MissionControlData; 
           </button>
         )}
       </div>
+
+      {/* Resolution Toast */}
+      {resolveToast && (
+        <div className="bg-emerald-900/30 border border-emerald-700/50 rounded-xl px-4 py-3 flex items-center gap-3 animate-pulse">
+          <span className="text-emerald-400 text-lg">✓</span>
+          <p className="text-sm text-emerald-300">{resolveToast}</p>
+        </div>
+      )}
 
       {/* 5-Panel Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

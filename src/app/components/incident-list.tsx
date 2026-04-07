@@ -73,6 +73,11 @@ export function IncidentList({ incidents, selectedId, onSelect }: IncidentListPr
                         {incident.status}
                       </span>
                     )}
+                    {incident.image_path && (
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-400">
+                        👁 Vision
+                      </span>
+                    )}
                   </div>
                   <p className={`text-sm font-medium truncate ${isResolved ? 'text-gray-400 line-through decoration-gray-600' : 'text-gray-200'}`}>
                     {incident.title}
