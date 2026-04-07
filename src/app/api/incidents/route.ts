@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { incidents } from '@/lib/schema';
 import { runPipeline } from '@/lib/pipeline';
 import { validateAndSanitize } from '@/lib/guardrails';
+import { findSimilarIncident } from '@/lib/dedup';
 import { desc } from 'drizzle-orm';
 import fs from 'fs';
 import path from 'path';
@@ -67,6 +68,13 @@ export async function POST(request: NextRequest) {
       imageMimeType = imageFile.type;
     }
 
+    // Deduplication check — PA·co pattern from pgvector-maintenance.md
+    const existingIncidents = db.select().from(incidents).all();
+    const dedup = findSimilarIncident(titleCheck.sanitized, descCheck.sanitized, existingIncidents);
+    if (dedup.isDuplicate) {
+      console.warn(`[dedup] Similar incident detected: ${dedup.message}`);
+    }
+
     // Create incident record
     const incident = db.insert(incidents).values({
       title: titleCheck.sanitized,
@@ -76,7 +84,7 @@ export async function POST(request: NextRequest) {
       image_path: imagePath,
     }).returning().get();
 
-    // Run the full agent pipeline
+    // Run the full agent pipeline (even for duplicates — different root cause is possible)
     const result = await runPipeline({
       incidentId: incident.id,
       title: titleCheck.sanitized,
@@ -86,7 +94,10 @@ export async function POST(request: NextRequest) {
       imageMimeType,
     });
 
-    return NextResponse.json(result, { status: 201 });
+    return NextResponse.json({
+      ...result,
+      dedup: dedup.isDuplicate ? dedup : undefined,
+    }, { status: 201 });
   } catch (error) {
     console.error('Pipeline error:', error);
     return NextResponse.json(

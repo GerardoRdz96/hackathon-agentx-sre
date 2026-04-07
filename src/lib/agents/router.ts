@@ -38,6 +38,19 @@ const TEAM_MAP: Record<string, { team: string; oncall: string }> = {
   infrastructure: { team: 'infrastructure-team', oncall: 'carlos@medusa-store.com' },
 };
 
+// Time-based routing — PA·co pattern from schedule-preflight.py
+function getBusinessHoursContext(): { isBusinessHours: boolean; timezone: string; currentHour: number } {
+  const now = new Date();
+  const cstOffset = -6; // CST (America/Monterrey)
+  const utcHour = now.getUTCHours();
+  const cstHour = (utcHour + cstOffset + 24) % 24;
+  return {
+    isBusinessHours: cstHour >= 9 && cstHour < 18,
+    timezone: 'CST',
+    currentHour: cstHour,
+  };
+}
+
 export async function runRouterAgent(input: RouterInput): Promise<RouterResult> {
   logAgentStart(input.incidentId, 'router');
   const agentStart = performance.now();
@@ -53,6 +66,15 @@ export async function runRouterAgent(input: RouterInput): Promise<RouterResult> 
     if (input.triage.confidence < 0.5 && !['critical', 'high'].includes(input.triage.severity)) {
       effectiveSeverity = 'high';
       escalationReason = `Auto-escalated: triage confidence ${(input.triage.confidence * 100).toFixed(0)}% below threshold (50%)`;
+    }
+
+    // Time-based routing context
+    const hours = getBusinessHoursContext();
+    let routingNote: string | null = null;
+    if (!hours.isBusinessHours && (effectiveSeverity === 'critical' || effectiveSeverity === 'high')) {
+      routingNote = `After-hours alert (${hours.currentHour}:00 ${hours.timezone}). On-call engineer paged immediately.`;
+    } else if (!hours.isBusinessHours) {
+      routingNote = `After-hours (${hours.currentHour}:00 ${hours.timezone}). Queued for next business day.`;
     }
 
     // Create ticket
@@ -74,7 +96,7 @@ export async function runRouterAgent(input: RouterInput): Promise<RouterResult> 
     const engineerNotif = {
       type: 'assignment',
       recipient: teamInfo.oncall,
-      message: `[${effectiveSeverity.toUpperCase()}] Incident #${input.incidentId} assigned to you. Component: ${input.triage.component}. ${topHypothesis?.description || 'Investigation needed.'}${escalationReason ? ' (' + escalationReason + ')' : ''}`,
+      message: `[${effectiveSeverity.toUpperCase()}] Incident #${input.incidentId} assigned to you. Component: ${input.triage.component}. ${topHypothesis?.description || 'Investigation needed.'}${escalationReason ? ' (' + escalationReason + ')' : ''}${routingNote ? ' [' + routingNote + ']' : ''}`,
     };
     db.insert(notifications).values({ incident_id: input.incidentId, ...engineerNotif }).run();
     logNotification(input.incidentId, engineerNotif.type, engineerNotif.recipient);
