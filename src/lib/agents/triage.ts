@@ -1,5 +1,7 @@
 import { classifyIncident, analyzeImage } from '../claude';
 import { startTrace, endTrace } from '../traces';
+import { logAgentStart, logAgentEnd } from '../logger';
+import { recordAgentDuration } from '../metrics';
 
 export interface TriageInput {
   incidentId: number;
@@ -22,6 +24,8 @@ export interface TriageResult {
 }
 
 export async function runTriageAgent(input: TriageInput): Promise<TriageResult> {
+  logAgentStart(input.incidentId, 'triage');
+  const agentStart = performance.now();
   const traceKey = startTrace(input.incidentId, 'triage', `Title: ${input.title}`);
 
   try {
@@ -54,7 +58,10 @@ export async function runTriageAgent(input: TriageInput): Promise<TriageResult> 
       ...(imageAnalysis && { imageAnalysis }),
     };
 
+    const dur = performance.now() - agentStart;
     endTrace(traceKey, `Severity: ${result.severity}, Component: ${result.component}, Type: ${result.type}`);
+    logAgentEnd(input.incidentId, 'triage', dur, `${result.severity}/${result.component}`);
+    recordAgentDuration('triage', dur);
     return result;
   } catch (error) {
     endTrace(traceKey, `Error: ${error instanceof Error ? error.message : 'Unknown'}`);

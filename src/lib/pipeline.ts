@@ -7,6 +7,8 @@ import { runCodeAnalystAgent, type CodeAnalysisResult } from './agents/code-anal
 import { runHypothesisAgent, type HypothesisResult } from './agents/hypothesis';
 import { runRouterAgent, type RouterResult } from './agents/router';
 import { getTraceTimeline } from './traces';
+import { logPipelineStart, logTriage, logPipelineEnd, logError } from './logger';
+import { recordIncident, recordPipelineDuration } from './metrics';
 
 export interface PipelineInput {
   incidentId: number;
@@ -30,6 +32,7 @@ export interface PipelineResult {
 
 export async function runPipeline(input: PipelineInput): Promise<PipelineResult> {
   const startTime = performance.now();
+  logPipelineStart(input.incidentId, input.title);
 
   // Agent 1: Triage
   db.update(incidents).set({ status: 'triaged' }).where(eq(incidents.id, input.incidentId)).run();
@@ -43,6 +46,7 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
   });
 
   // Update incident with triage results
+  logTriage(input.incidentId, triage.severity, triage.component);
   db.update(incidents).set({
     severity: triage.severity as 'critical' | 'high' | 'medium' | 'low',
     component: triage.component,
@@ -85,6 +89,11 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
 
   const totalDurationMs = performance.now() - startTime;
   const traces = getTraceTimeline(input.incidentId);
+
+  // Observability: structured logs + metrics
+  logPipelineEnd(input.incidentId, totalDurationMs);
+  recordIncident(triage.severity, triage.component);
+  recordPipelineDuration(totalDurationMs);
 
   return {
     incidentId: input.incidentId,

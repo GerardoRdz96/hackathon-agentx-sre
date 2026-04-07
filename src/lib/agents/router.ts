@@ -1,6 +1,8 @@
 import { db } from '../db';
 import { tickets, notifications } from '../schema';
 import { startTrace, endTrace } from '../traces';
+import { logAgentStart, logAgentEnd, logTicketCreated, logNotification } from '../logger';
+import { recordAgentDuration } from '../metrics';
 import type { TriageResult } from './triage';
 import type { HypothesisResult } from './hypothesis';
 
@@ -35,6 +37,8 @@ const TEAM_MAP: Record<string, { team: string; oncall: string }> = {
 };
 
 export async function runRouterAgent(input: RouterInput): Promise<RouterResult> {
+  logAgentStart(input.incidentId, 'router');
+  const agentStart = performance.now();
   const traceKey = startTrace(input.incidentId, 'router', `Component: ${input.triage.component}, Severity: ${input.triage.severity}`);
 
   try {
@@ -51,6 +55,7 @@ export async function runRouterAgent(input: RouterInput): Promise<RouterResult> 
       status: 'open',
       assigned_to: teamInfo.oncall,
     }).returning().get();
+    logTicketCreated(input.incidentId, ticketResult.id, teamInfo.team, teamInfo.oncall);
 
     // Send notifications
     const notificationsList: RouterResult['notifications_sent'] = [];
@@ -65,6 +70,7 @@ export async function runRouterAgent(input: RouterInput): Promise<RouterResult> 
       incident_id: input.incidentId,
       ...engineerNotif,
     }).run();
+    logNotification(input.incidentId, engineerNotif.type, engineerNotif.recipient);
     notificationsList.push(engineerNotif);
 
     // For critical/high severity, notify team lead
@@ -78,6 +84,7 @@ export async function runRouterAgent(input: RouterInput): Promise<RouterResult> 
         incident_id: input.incidentId,
         ...escalationNotif,
       }).run();
+      logNotification(input.incidentId, escalationNotif.type, escalationNotif.recipient);
       notificationsList.push(escalationNotif);
     }
 
@@ -92,6 +99,7 @@ export async function runRouterAgent(input: RouterInput): Promise<RouterResult> 
         incident_id: input.incidentId,
         ...reporterNotif,
       }).run();
+      logNotification(input.incidentId, reporterNotif.type, reporterNotif.recipient);
       notificationsList.push(reporterNotif);
     }
 
@@ -103,6 +111,9 @@ export async function runRouterAgent(input: RouterInput): Promise<RouterResult> 
     };
 
     endTrace(traceKey, `Ticket #${result.ticket_id} → ${result.team} (${result.assigned_to}), ${result.notifications_sent.length} notifications`);
+    const dur = performance.now() - agentStart;
+    logAgentEnd(input.incidentId, 'router', dur, `ticket_id=${result.ticket_id} team=${result.team}`);
+    recordAgentDuration('router', dur);
     return result;
   } catch (error) {
     endTrace(traceKey, `Error: ${error instanceof Error ? error.message : 'Unknown'}`);

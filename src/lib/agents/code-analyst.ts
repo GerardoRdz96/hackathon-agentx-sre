@@ -1,6 +1,8 @@
 import { analyzeCode } from '../claude';
 import { searchCodeFiles, getRecentChanges, SIMULATED_GIT_LOG } from '../medusa-code';
 import { startTrace, endTrace } from '../traces';
+import { logAgentStart, logAgentEnd } from '../logger';
+import { recordAgentDuration } from '../metrics';
 
 export interface CodeAnalysisInput {
   incidentId: number;
@@ -25,6 +27,8 @@ export interface CodeAnalysisResult {
 }
 
 export async function runCodeAnalystAgent(input: CodeAnalysisInput): Promise<CodeAnalysisResult> {
+  logAgentStart(input.incidentId, 'code-analyst');
+  const agentStart = performance.now();
   const traceKey = startTrace(input.incidentId, 'code-analyst', `Component: ${input.component || 'all'}`);
 
   try {
@@ -75,6 +79,9 @@ export async function runCodeAnalystAgent(input: CodeAnalysisInput): Promise<Cod
     };
 
     endTrace(traceKey, `Found ${result.files_found.length} files, ${result.relevant_code_snippets.length} concerns, likelihood: ${result.root_cause_likelihood}`);
+    const dur = performance.now() - agentStart;
+    logAgentEnd(input.incidentId, 'code-analyst', dur, `${result.files_found.length} files found`);
+    recordAgentDuration('code-analyst', dur);
     return result;
   } catch (error) {
     endTrace(traceKey, `Error: ${error instanceof Error ? error.message : 'Unknown'}`);

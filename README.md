@@ -4,6 +4,9 @@
 
 Built for the [AgentX Hackathon 2026](https://www.softserveinc.com/) by SoftServe.
 
+**Team:** [Penguin Alley](https://penguinalley.com) (Solo — Luis Gerardo Rodríguez García, Monterrey, MX)
+**Architecture inspired by:** [PA·co](https://github.com/PenguinAlleyApps/paco-framework) — a production multi-agent operating system with 12 agents across 5 departments, built on Anthropic Claude. The agent pipeline pattern, model tiering strategy, and observability architecture in this project are battle-tested patterns from PA·co's 100+ autonomous build sessions.
+
 ---
 
 ## The Problem
@@ -44,7 +47,7 @@ INCIDENT IN (text + screenshot)
 | **5-Agent Pipeline** | Triage, Log Analyst, Code Analyst, Hypothesis Engine, Router — each with a dedicated system prompt and model |
 | **Multimodal Input** | Paste a Grafana dashboard screenshot or error page — Claude Vision extracts error patterns alongside text |
 | **Parallel Analysis** | Log Analyst and Code Analyst run concurrently via `Promise.all()`, cutting wall-clock time by ~3 seconds |
-| **Observability Traces** | Every agent call is traced with start/end timestamps, token counts, and model used — stored in SQLite, visualized in the UI timeline |
+| **Observability (Logs + Traces + Metrics)** | Structured JSON logs (stdout), per-agent traces (SQLite + UI timeline), aggregated metrics (`/api/metrics` endpoint: incident counts, severity distribution, avg pipeline duration, per-agent latency) |
 | **Guardrails & Security** | Canary string detection, prompt injection pattern filtering, HTML stripping, input length validation, output truncation |
 | **Mock Integrations** | Linear-style ticket creation, Slack/email notification simulation — ready to swap for real APIs |
 | **Resolution Flow** | Mark incidents resolved from the dashboard — reporter is notified automatically |

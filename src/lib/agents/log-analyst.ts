@@ -1,6 +1,8 @@
 import { analyzeLogs } from '../claude';
 import { searchLogs, getAnomalousLogs } from '../simulated-logs';
 import { startTrace, endTrace } from '../traces';
+import { logAgentStart, logAgentEnd } from '../logger';
+import { recordAgentDuration } from '../metrics';
 
 export interface LogAnalysisInput {
   incidentId: number;
@@ -22,6 +24,8 @@ export interface LogAnalysisResult {
 }
 
 export async function runLogAnalystAgent(input: LogAnalysisInput): Promise<LogAnalysisResult> {
+  logAgentStart(input.incidentId, 'log-analyst');
+  const agentStart = performance.now();
   const traceKey = startTrace(input.incidentId, 'log-analyst', `Component: ${input.component || 'all'}, Type: ${input.type || 'all'}`);
 
   try {
@@ -71,6 +75,9 @@ export async function runLogAnalystAgent(input: LogAnalysisInput): Promise<LogAn
     };
 
     endTrace(traceKey, `Found ${result.patterns_found.length} patterns, ${result.relevant_entries.length} entries, correlation: ${result.correlation_score}`);
+    const dur = performance.now() - agentStart;
+    logAgentEnd(input.incidentId, 'log-analyst', dur, `${result.patterns_found.length} patterns found`);
+    recordAgentDuration('log-analyst', dur);
     return result;
   } catch (error) {
     endTrace(traceKey, `Error: ${error instanceof Error ? error.message : 'Unknown'}`);
