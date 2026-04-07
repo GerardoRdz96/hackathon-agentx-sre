@@ -50,7 +50,7 @@ export default function Home() {
             </span>
             <span>{allIncidents.length} incidents</span>
             <span className="border-l border-gray-700 pl-4 flex items-center gap-1.5">
-              <span className="text-base">🐧</span>
+              <img src="/penguin-alley-icon.png" alt="Penguin Alley" className="w-5 h-5 opacity-70" />
               <span className="text-gray-400 font-medium">Penguin Alley</span>
             </span>
           </div>
@@ -74,7 +74,10 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="border-t border-gray-800 mt-12 py-4 text-center text-xs text-gray-600">
-        Built by PA&middot;co &mdash; A Penguin Alley System | AgentX Hackathon 2026
+        <div className="flex items-center justify-center gap-2">
+          <img src="/penguin-alley-icon.png" alt="Penguin Alley" className="w-4 h-4 opacity-50" />
+          <span>Built by PA·co — A <a href="https://penguinalley.com" target="_blank" rel="noopener" className="text-gray-400 hover:text-gray-300 underline">Penguin Alley</a> System | AgentX Hackathon 2026</span>
+        </div>
       </footer>
     </div>
   );
