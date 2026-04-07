@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const AGENTS = [
   { name: 'Triage', model: 'Haiku', icon: '🎯', color: 'red', parallel: false },
@@ -23,67 +23,69 @@ interface PipelineStepperProps {
 }
 
 export function PipelineStepper({ active }: PipelineStepperProps) {
-  const [activeAgent, setActiveAgent] = useState(0);
+  const [activeAgent, setActiveAgent] = useState(-1);
   const [elapsed, setElapsed] = useState(0);
-  const [done, setDone] = useState(false);
+  const [phase, setPhase] = useState<'idle' | 'running' | 'complete'>('idle');
+  const prevActive = useRef(false);
 
   useEffect(() => {
-    if (!active) {
+    // Detect transition: false → true = new pipeline started
+    if (active && !prevActive.current) {
+      // Reset everything for fresh run
       setActiveAgent(0);
       setElapsed(0);
-      setDone(false);
-      return;
+      setPhase('running');
+
+      const startTime = Date.now();
+      const agentTimings = [2000, 4000, 4000, 8000, 2000];
+      const timers: NodeJS.Timeout[] = [];
+      let accumulated = 0;
+
+      agentTimings.forEach((timing, i) => {
+        accumulated += timing;
+        timers.push(setTimeout(() => {
+          if (i < AGENTS.length - 1) setActiveAgent(i + 1);
+        }, accumulated));
+      });
+
+      const interval = setInterval(() => {
+        setElapsed(Date.now() - startTime);
+      }, 100);
+
+      prevActive.current = true;
+
+      return () => {
+        timers.forEach(clearTimeout);
+        clearInterval(interval);
+      };
     }
 
-    const startTime = Date.now();
+    // Detect transition: true → false = pipeline finished
+    if (!active && prevActive.current) {
+      prevActive.current = false;
+      setActiveAgent(AGENTS.length); // all done
+      setPhase('complete');
 
-    // Cycle through agents progressively — each agent gets longer
-    // because we don't know exact timing, we advance every few seconds
-    const agentTimings = [2000, 4000, 4000, 8000, 2000]; // rough estimates
-    let currentAgent = 0;
-    let accumulated = 0;
+      // Hide after 3 seconds
+      const hideTimer = setTimeout(() => {
+        setPhase('idle');
+        setActiveAgent(-1);
+        setElapsed(0);
+      }, 3000);
 
-    const timers: NodeJS.Timeout[] = [];
-
-    agentTimings.forEach((timing, i) => {
-      accumulated += timing;
-      const timer = setTimeout(() => {
-        if (i < AGENTS.length - 1) {
-          currentAgent = i + 1;
-          setActiveAgent(i + 1);
-        }
-      }, accumulated);
-      timers.push(timer);
-    });
-
-    // Elapsed timer
-    const interval = setInterval(() => {
-      setElapsed(Date.now() - startTime);
-    }, 100);
-
-    return () => {
-      timers.forEach(clearTimeout);
-      clearInterval(interval);
-    };
+      return () => clearTimeout(hideTimer);
+    }
   }, [active]);
 
-  // When pipeline finishes (active goes false), mark done briefly
-  useEffect(() => {
-    if (!active && elapsed > 0) {
-      setDone(true);
-      setActiveAgent(AGENTS.length); // all done
-      const timer = setTimeout(() => setDone(false), 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [active, elapsed]);
+  if (phase === 'idle') return null;
 
-  if (!active && !done) return null;
+  const isComplete = phase === 'complete';
 
   return (
     <div className="mt-4 bg-gray-800/50 border border-gray-700 rounded-xl p-4">
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-semibold text-gray-300 uppercase tracking-wider flex items-center gap-2">
-          {done ? (
+          {isComplete ? (
             <><span className="text-emerald-400">✓</span> Pipeline Complete</>
           ) : (
             <><span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" /> Agents Working</>
@@ -96,32 +98,28 @@ export function PipelineStepper({ active }: PipelineStepperProps) {
 
       <div className="space-y-1.5">
         {AGENTS.map((agent, i) => {
-          const isDone = i < activeAgent;
-          const isActive = i === activeAgent && active;
-          // For parallel agents (1,2), both activate at same step
-          const isParallelActive = agent.parallel && active && (activeAgent === 1 || activeAgent === 2) && (i === 1 || i === 2);
-          const isParallelDone = agent.parallel && activeAgent > 2;
-          const showActive = isActive || isParallelActive;
-          const showDone = isDone || isParallelDone || done;
+          const isDone = i < activeAgent || isComplete;
+          const isActive = !isComplete && (
+            i === activeAgent ||
+            (agent.parallel && (activeAgent === 1 || activeAgent === 2) && (i === 1 || i === 2))
+          );
           const colors = COLOR_MAP[agent.color];
 
           return (
             <div key={agent.name} className="flex items-center gap-3">
-              {/* Status dot */}
               <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold transition-all duration-500 ${
-                showDone
+                isDone
                   ? `${colors.bg} text-white shadow-lg ${colors.glow}`
-                  : showActive
+                  : isActive
                   ? `${colors.bg} text-white animate-pulse shadow-lg ${colors.glow}`
                   : 'bg-gray-700/50 text-gray-600'
               }`}>
-                {showDone ? '✓' : showActive ? agent.icon : '·'}
+                {isDone ? '✓' : isActive ? agent.icon : '·'}
               </div>
 
-              {/* Agent name + model */}
               <div className="flex-1 flex items-center gap-2">
                 <span className={`text-xs font-medium transition-colors duration-300 ${
-                  showDone ? 'text-gray-200' : showActive ? 'text-white' : 'text-gray-500'
+                  isDone ? 'text-gray-200' : isActive ? 'text-white' : 'text-gray-500'
                 }`}>
                   {agent.name}
                 </span>
@@ -131,18 +129,16 @@ export function PipelineStepper({ active }: PipelineStepperProps) {
                 )}
               </div>
 
-              {/* Status text */}
               <span className={`text-[10px] font-mono ${
-                showDone ? 'text-emerald-400' : showActive ? 'text-yellow-400 animate-pulse' : 'text-gray-600'
+                isDone ? 'text-emerald-400' : isActive ? 'text-yellow-400 animate-pulse' : 'text-gray-600'
               }`}>
-                {showDone ? 'done' : showActive ? 'working...' : 'waiting'}
+                {isDone ? 'done' : isActive ? 'working...' : 'waiting'}
               </span>
             </div>
           );
         })}
       </div>
 
-      {/* Flow diagram */}
       <div className="flex items-center justify-center gap-1 text-[10px] text-gray-600 mt-3 pt-2 border-t border-gray-700/50">
         <span>Triage</span><span className="text-gray-700">→</span>
         <span className="text-blue-400">[Log ∥ Code]</span><span className="text-gray-700">→</span>
