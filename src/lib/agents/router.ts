@@ -3,6 +3,8 @@ import { tickets, notifications } from '../schema';
 import { startTrace, endTrace } from '../traces';
 import { logAgentStart, logAgentEnd, logTicketCreated, logNotification } from '../logger';
 import { recordAgentDuration } from '../metrics';
+import { sendEngineerAssignment, sendEscalation, sendReporterAcknowledgment } from '../email';
+import { sendTelegramAlert } from '../telegram';
 import type { TriageResult } from './triage';
 import type { HypothesisResult } from './hypothesis';
 
@@ -60,47 +62,63 @@ export async function runRouterAgent(input: RouterInput): Promise<RouterResult> 
     // Send notifications
     const notificationsList: RouterResult['notifications_sent'] = [];
 
-    // Notify assigned engineer
+    // Notify assigned engineer (DB + real email)
     const engineerNotif = {
       type: 'assignment',
       recipient: teamInfo.oncall,
       message: `[${input.triage.severity.toUpperCase()}] Incident #${input.incidentId} assigned to you. Component: ${input.triage.component}. ${topHypothesis?.description || 'Investigation needed.'}`,
     };
-    db.insert(notifications).values({
-      incident_id: input.incidentId,
-      ...engineerNotif,
-    }).run();
+    db.insert(notifications).values({ incident_id: input.incidentId, ...engineerNotif }).run();
     logNotification(input.incidentId, engineerNotif.type, engineerNotif.recipient);
     notificationsList.push(engineerNotif);
 
-    // For critical/high severity, notify team lead
+    // Real email — fire and forget (don't block pipeline)
+    sendEngineerAssignment(teamInfo.oncall, {
+      id: input.incidentId, title: engineerNotif.message, severity: input.triage.severity,
+      component: input.triage.component, team: teamInfo.team,
+      hypothesis: topHypothesis?.description, suggestedFix: topHypothesis?.suggested_fix,
+    }).catch(() => {});
+
+    // For critical/high severity, notify team lead (DB + real email + Telegram)
     if (input.triage.severity === 'critical' || input.triage.severity === 'high') {
       const escalationNotif = {
         type: 'escalation',
         recipient: `${teamInfo.team}-lead@medusa-store.com`,
         message: `[ESCALATION] ${input.triage.severity.toUpperCase()} incident #${input.incidentId} on ${input.triage.component}. Blast radius: ${topHypothesis?.blast_radius || 'unknown'}`,
       };
-      db.insert(notifications).values({
-        incident_id: input.incidentId,
-        ...escalationNotif,
-      }).run();
+      db.insert(notifications).values({ incident_id: input.incidentId, ...escalationNotif }).run();
       logNotification(input.incidentId, escalationNotif.type, escalationNotif.recipient);
       notificationsList.push(escalationNotif);
+
+      // Real email + Telegram for escalations
+      sendEscalation(escalationNotif.recipient, {
+        id: input.incidentId, title: topHypothesis?.description || 'Incident requires investigation',
+        severity: input.triage.severity, component: input.triage.component, team: teamInfo.team,
+      }).catch(() => {});
+      sendTelegramAlert({
+        id: input.incidentId, title: topHypothesis?.description || 'Incident requires investigation',
+        severity: input.triage.severity, component: input.triage.component,
+        team: teamInfo.team, assignedTo: teamInfo.oncall,
+        hypothesis: topHypothesis?.description,
+      }).catch(() => {});
     }
 
-    // Notify reporter if email provided
+    // Notify reporter if email provided (DB + real email)
     if (input.reporterEmail) {
       const reporterNotif = {
         type: 'acknowledgment',
         recipient: input.reporterEmail,
         message: `Your incident report has been received and assigned to the ${teamInfo.team}. Ticket #${ticketResult.id}. We're investigating.`,
       };
-      db.insert(notifications).values({
-        incident_id: input.incidentId,
-        ...reporterNotif,
-      }).run();
+      db.insert(notifications).values({ incident_id: input.incidentId, ...reporterNotif }).run();
       logNotification(input.incidentId, reporterNotif.type, reporterNotif.recipient);
       notificationsList.push(reporterNotif);
+
+      // Real email to reporter
+      sendReporterAcknowledgment(input.reporterEmail, {
+        id: input.incidentId, title: topHypothesis?.description || 'Incident under investigation',
+        severity: input.triage.severity, team: teamInfo.team, ticketId: ticketResult.id,
+      }).catch(() => {});
     }
 
     const result: RouterResult = {

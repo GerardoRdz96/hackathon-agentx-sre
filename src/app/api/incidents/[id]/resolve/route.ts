@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { incidents, tickets, notifications } from '@/lib/schema';
 import { eq } from 'drizzle-orm';
+import { sendResolutionEmail } from '@/lib/email';
+import { logResolved } from '@/lib/logger';
 
 export async function POST(
   request: NextRequest,
@@ -34,15 +36,21 @@ export async function POST(
         recipient: incident.reporter_email,
         message: `Incident #${incidentId} "${incident.title}" has been resolved. Thank you for reporting.`,
       };
-      db.insert(notifications).values({
-        incident_id: incidentId,
-        ...notif,
-      }).run();
+      db.insert(notifications).values({ incident_id: incidentId, ...notif }).run();
       notificationsSent.push(notif);
+
     }
 
     // Notify assigned engineers
     const incidentTickets = db.select().from(tickets).where(eq(tickets.incident_id, incidentId)).all();
+
+    // Real email to reporter (after tickets query so we have ticketId)
+    if (incident.reporter_email) {
+      sendResolutionEmail(incident.reporter_email, {
+        id: incidentId, title: incident.title, ticketId: incidentTickets[0]?.id,
+      }).catch(() => {});
+    }
+    logResolved(incidentId);
     for (const ticket of incidentTickets) {
       if (ticket.assigned_to) {
         const notif = {
