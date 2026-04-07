@@ -1,0 +1,15 @@
+services:
+  sre-agent:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    volumes:
+      - sqlite-data:/app/data
+      - uploads:/app/uploads
+    restart: unless-stopped
+
+volumes:
+  sqlite-data:
+  uploads:

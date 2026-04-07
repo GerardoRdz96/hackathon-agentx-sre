@@ -30,8 +30,13 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files (NEVER commit — API keys)
 .env*
+!.env.example
+
+# database (runtime data)
+/data/
+/uploads/
 
 # vercel
 .vercel
