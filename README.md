@@ -94,7 +94,7 @@ We use **two Claude models** selected for the right tradeoff between speed, cost
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/your-org/hackathon-agentx-sre.git
+git clone https://github.com/GerardoRdz96/hackathon-agentx-sre.git
 cd hackathon-agentx-sre
 
 # 2. Configure environment
