@@ -6,7 +6,13 @@
 import { Resend } from 'resend';
 import { log } from './logger';
 
-const resend = new Resend(process.env.RESEND_API_KEY || '');
+// Lazy initialization — Resend constructor throws if key is empty at build time
+let _resend: Resend | null = null;
+function getResend(): Resend | null {
+  if (!process.env.RESEND_API_KEY) return null;
+  if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY);
+  return _resend;
+}
 const FROM = process.env.RESEND_FROM || 'SRE Agent <hello@penguinalley.com>';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
@@ -52,7 +58,9 @@ export async function sendEngineerAssignment(to: string, incident: {
       ${incident.suggestedFix ? `<div style="background:#f0fdf4;border-left:4px solid #22c55e;padding:12px;margin:12px 0;"><strong>Suggested Fix:</strong> ${incident.suggestedFix}</div>` : ''}
       <a href="${APP_URL}" style="display:inline-block;background:#E53935;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;margin-top:12px;">Open Dashboard</a>`;
 
-    await resend.emails.send({ from: FROM, to, subject: `[SRE-${incident.id}] ${incident.severity.toUpperCase()}: ${incident.title}`, html: brandedHtml(`Incident Assigned — ${incident.title}`, body) });
+    const client = getResend();
+    if (!client) { log('WARN', 'email_skip', incident.id, 'Resend not configured — skipping email'); return false; }
+    await client.emails.send({ from: FROM, to, subject: `[SRE-${incident.id}] ${incident.severity.toUpperCase()}: ${incident.title}`, html: brandedHtml(`Incident Assigned — ${incident.title}`, body) });
     log('INFO', 'email_sent', incident.id, `Engineer assignment email sent to ${to}`, { agent: 'router' });
     return true;
   } catch (error) {
@@ -74,7 +82,9 @@ export async function sendEscalation(to: string, incident: {
       <p style="color:#333;">An engineer has been assigned. Review the incident dashboard for full analysis.</p>
       <a href="${APP_URL}" style="display:inline-block;background:#dc2626;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;margin-top:12px;">Open Dashboard</a>`;
 
-    await resend.emails.send({ from: FROM, to, subject: `🔴 ESCALATION [SRE-${incident.id}]: ${incident.title}`, html: brandedHtml(`Escalation — ${incident.title}`, body, '#dc2626') });
+    const client = getResend();
+    if (!client) { log('WARN', 'email_skip', incident.id, 'Resend not configured — skipping email'); return false; }
+    await client.emails.send({ from: FROM, to, subject: `🔴 ESCALATION [SRE-${incident.id}]: ${incident.title}`, html: brandedHtml(`Escalation — ${incident.title}`, body, '#dc2626') });
     log('INFO', 'email_sent', incident.id, `Escalation email sent to ${to}`, { agent: 'router' });
     return true;
   } catch (error) {
@@ -97,7 +107,9 @@ export async function sendReporterAcknowledgment(to: string, incident: {
       </table>
       <p style="color:#333;">You will receive an update when this incident is resolved.</p>`;
 
-    await resend.emails.send({ from: FROM, to, subject: `[SRE-${incident.ticketId}] Received: ${incident.title}`, html: brandedHtml(`Incident Acknowledged — ${incident.title}`, body, '#2563eb') });
+    const client = getResend();
+    if (!client) { log('WARN', 'email_skip', incident.id, 'Resend not configured — skipping email'); return false; }
+    await client.emails.send({ from: FROM, to, subject: `[SRE-${incident.ticketId}] Received: ${incident.title}`, html: brandedHtml(`Incident Acknowledged — ${incident.title}`, body, '#2563eb') });
     log('INFO', 'email_sent', incident.id, `Reporter acknowledgment sent to ${to}`, { agent: 'router' });
     return true;
   } catch (error) {
@@ -118,7 +130,9 @@ export async function sendResolutionEmail(to: string, incident: {
       <p style="color:#333;">Ticket #SRE-${incident.ticketId || incident.id} is now closed. If you experience further issues, please submit a new incident report.</p>
       <a href="${APP_URL}" style="display:inline-block;background:#22c55e;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;margin-top:12px;">View Resolution</a>`;
 
-    await resend.emails.send({ from: FROM, to, subject: `✅ Resolved: ${incident.title}`, html: brandedHtml(`Incident Resolved — ${incident.title}`, body, '#22c55e') });
+    const client = getResend();
+    if (!client) { log('WARN', 'email_skip', incident.id, 'Resend not configured — skipping email'); return false; }
+    await client.emails.send({ from: FROM, to, subject: `✅ Resolved: ${incident.title}`, html: brandedHtml(`Incident Resolved — ${incident.title}`, body, '#22c55e') });
     log('INFO', 'email_sent', incident.id, `Resolution email sent to ${to}`, { agent: 'router' });
     return true;
   } catch (error) {
