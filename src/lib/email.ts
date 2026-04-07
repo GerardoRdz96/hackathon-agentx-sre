@@ -20,8 +20,8 @@ function brandedHtml(title: string, body: string, accentColor: string = '#E53935
   return `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#f5f5f5;font-family:Calibri,'Segoe UI',Arial,sans-serif;">
 <div style="max-width:560px;margin:0 auto;">
   <div style="background:#1a1a2e;padding:16px 24px;text-align:left;">
-    <span style="color:#ffffff;font-size:16px;font-weight:bold;">🔴 SRE Agent</span>
-    <span style="color:#888;font-size:12px;margin-left:8px;">Multi-Agent Incident Response</span>
+    <span style="color:#ffffff;font-size:16px;font-weight:bold;">🔴 Incidex</span>
+    <span style="color:#888;font-size:12px;margin-left:8px;">AI-Powered SRE Agent</span>
   </div>
   <div style="height:4px;background:${accentColor};"></div>
   <div style="background:#ffffff;padding:24px;">
@@ -29,7 +29,7 @@ function brandedHtml(title: string, body: string, accentColor: string = '#E53935
     ${body}
   </div>
   <div style="padding:12px 24px;text-align:center;color:#888;font-size:11px;">
-    SRE Agent — A <a href="https://penguinalley.com" style="color:#E53935;text-decoration:none;">Penguin Alley</a> System | AgentX Hackathon 2026
+    Incidex — A <a href="https://penguinalley.com" style="color:#E53935;text-decoration:none;">Penguin Alley</a> Product | AgentX Hackathon 2026
   </div>
 </div></body></html>`;
 }

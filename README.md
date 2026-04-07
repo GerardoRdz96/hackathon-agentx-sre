@@ -1,6 +1,6 @@
-# SRE Incident Intake & Triage Agent
+# Incidex — AI-Powered SRE Agent
 
-**An AI-powered, 5-agent pipeline that triages e-commerce incidents in ~7 seconds instead of 47 minutes.**
+**A 5-agent AI pipeline that triages e-commerce incidents in seconds instead of 47 minutes. A [Penguin Alley](https://penguinalley.com) product.**
 
 Built for the [AgentX Hackathon 2026](https://www.softserveinc.com/) by SoftServe.
 

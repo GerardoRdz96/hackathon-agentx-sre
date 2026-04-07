@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SRE Agent - Multi-Agent Incident Response",
-  description: "AI-powered SRE agent for Medusa.js e-commerce incident triage, analysis, and resolution. Built by Penguin Alley.",
+  title: "Incidex — AI-Powered SRE Agent by Penguin Alley",
+  description: "5-agent AI pipeline that triages e-commerce incidents in seconds. Multimodal, hypothesis-driven, real notifications. A Penguin Alley product.",
 };
 
 export default function RootLayout({

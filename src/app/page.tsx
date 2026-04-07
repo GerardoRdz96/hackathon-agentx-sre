@@ -39,8 +39,8 @@ export default function Home() {
               SRE
             </div>
             <div>
-              <h1 className="text-lg font-semibold tracking-tight">SRE Agent</h1>
-              <p className="text-xs text-gray-500">Multi-Agent Incident Response for Medusa.js</p>
+              <h1 className="text-lg font-semibold tracking-tight">Incidex</h1>
+              <p className="text-xs text-gray-500">AI-Powered SRE Agent by Penguin Alley</p>
             </div>
           </div>
           <div className="flex items-center gap-4 text-xs text-gray-500">
@@ -76,7 +76,7 @@ export default function Home() {
       <footer className="border-t border-gray-800 mt-12 py-4 text-center text-xs text-gray-600">
         <div className="flex items-center justify-center gap-2">
           <img src="/penguin-alley-icon.png" alt="Penguin Alley" className="w-4 h-4 opacity-50" />
-          <span>Built by PA·co — A <a href="https://penguinalley.com" target="_blank" rel="noopener" className="text-gray-400 hover:text-gray-300 underline">Penguin Alley</a> System | AgentX Hackathon 2026</span>
+          <span>Incidex — A <a href="https://penguinalley.com" target="_blank" rel="noopener" className="text-gray-400 hover:text-gray-300 underline">Penguin Alley</a> Product | AgentX Hackathon 2026</span>
         </div>
       </footer>
     </div>

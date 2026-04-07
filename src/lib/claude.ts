@@ -147,7 +147,7 @@ export async function generateHypothesis(input: {
 
   const response = await client.messages.create({
     model: 'claude-sonnet-4-20250514',
-    max_tokens: 2048,
+    max_tokens: 4096,
     messages: [{
       role: 'user',
       content: `You are a senior SRE synthesizing findings for a Medusa.js e-commerce platform incident.
@@ -167,25 +167,14 @@ Code Analysis:
 - ${input.code_analysis.analysis}
 - Suspicious files: ${input.code_analysis.suspicious_files.join(', ')}
 
-Generate ranked hypotheses for the root cause. Respond with ONLY valid JSON:
-{
-  "hypotheses": [
-    {
-      "rank": 1,
-      "description": "hypothesis description",
-      "evidence": ["evidence1", "evidence2"],
-      "confidence": 0.0-1.0,
-      "blast_radius": "scope of impact",
-      "suggested_fix": "recommended fix"
-    }
-  ]
-}`
+Generate 2-3 ranked hypotheses for the root cause. Keep descriptions concise (1-2 sentences each). Respond with ONLY the JSON object below, no markdown, no code blocks, no explanation:
+{"hypotheses":[{"rank":1,"description":"concise hypothesis","evidence":["evidence1","evidence2"],"confidence":0.85,"blast_radius":"scope","suggested_fix":"fix"}]}`
     }],
   });
 
   const text = enforceOutputLength(
     response.content[0].type === 'text' ? response.content[0].text : '',
-    3000
+    8000
   );
   return parseJsonResponse(text) as {
     hypotheses: Array<{

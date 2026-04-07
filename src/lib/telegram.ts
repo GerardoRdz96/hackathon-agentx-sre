@@ -36,7 +36,7 @@ export async function sendTelegramAlert(incident: {
     `<b>Assigned:</b> ${incident.assignedTo}`,
     incident.hypothesis ? `\n<b>Root Cause:</b> ${escapeHtml(incident.hypothesis)}` : '',
     '',
-    `🐧 <i>SRE Agent — Penguin Alley</i>`,
+    `🐧 <i>Incidex — Penguin Alley</i>`,
   ].filter(Boolean).join('\n');
 
   try {
