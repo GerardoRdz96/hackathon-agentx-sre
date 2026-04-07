@@ -3,6 +3,7 @@ import { incidents } from '@/lib/schema';
 import { desc } from 'drizzle-orm';
 import { IncidentForm } from './components/incident-form';
 import { IncidentDashboard } from './components/incident-dashboard';
+import { MetricsDashboard } from './components/metrics-dashboard';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,6 +39,9 @@ export default function Home() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+        {/* System Observability Dashboard */}
+        <MetricsDashboard />
+
         {/* Top Section: Form + Recent Incidents */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1">
