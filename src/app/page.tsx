@@ -35,11 +35,9 @@ export default function Home() {
       <header className="border-b border-gray-800 bg-gray-950/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center font-bold text-sm">
-              SRE
-            </div>
+            <img src="/incidex-icon.svg" alt="Incidex" className="w-9 h-9" />
             <div>
-              <h1 className="text-lg font-semibold tracking-tight">Incidex</h1>
+              <h1 className="text-lg font-semibold tracking-tight">Incid<span className="text-red-500">ex</span></h1>
               <p className="text-xs text-gray-500">AI-Powered SRE Agent by Penguin Alley</p>
             </div>
           </div>
