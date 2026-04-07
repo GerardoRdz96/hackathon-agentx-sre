@@ -133,18 +133,18 @@ export function MissionControl({ data, onResolve }: { data: MissionControlData; 
               <p className="text-xs text-gray-500">No notifications sent yet</p>
             ) : (
               notifs.map(notif => (
-                <div key={notif.id} className="bg-gray-800/50 rounded-lg p-2.5">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                <div key={notif.id} className="bg-gray-800/50 rounded-lg p-2.5 overflow-hidden">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0 ${
                       notif.type === 'escalation' ? 'bg-red-500/20 text-red-400' :
                       notif.type === 'resolution' ? 'bg-emerald-500/20 text-emerald-400' :
                       'bg-blue-500/20 text-blue-400'
                     }`}>
                       {notif.type}
                     </span>
-                    <span className="text-[10px] text-gray-500">{notif.recipient}</span>
+                    <span className="text-[10px] text-gray-500 truncate">{notif.recipient}</span>
                   </div>
-                  <p className="text-xs text-gray-400">{notif.message}</p>
+                  <p className="text-xs text-gray-400 break-words">{notif.message}</p>
                 </div>
               ))
             )}
