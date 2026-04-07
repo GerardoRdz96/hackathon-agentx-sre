@@ -33,6 +33,13 @@ export async function runHypothesisAgent(input: HypothesisInput): Promise<Hypoth
   const traceKey = startTrace(input.incidentId, 'hypothesis', `Triage: ${input.triage.severity}/${input.triage.component}`);
 
   try {
+    // Defensive: ensure log/code analysis properties exist
+    const patterns = input.logAnalysis?.patterns_found || [];
+    const errorEntries = (input.logAnalysis?.relevant_entries || [])
+      .filter(e => e.level === 'ERROR')
+      .map(e => e.message)
+      .slice(0, 10);
+
     const result = await generateHypothesis({
       triage: {
         severity: input.triage.severity,
@@ -40,27 +47,36 @@ export async function runHypothesisAgent(input: HypothesisInput): Promise<Hypoth
         type: input.triage.type,
       },
       log_analysis: {
-        patterns: input.logAnalysis.patterns_found,
-        anomalies: input.logAnalysis.relevant_entries
-          .filter(e => e.level === 'ERROR')
-          .map(e => e.message)
-          .slice(0, 10),
+        patterns,
+        anomalies: errorEntries,
       },
       code_analysis: {
-        analysis: input.codeAnalysis.analysis,
-        suspicious_files: input.codeAnalysis.files_found,
+        analysis: input.codeAnalysis?.analysis || 'No code analysis available',
+        suspicious_files: input.codeAnalysis?.files_found || [],
       },
       incident_description: input.description,
     });
 
-    // Ensure hypotheses are sorted by rank
-    result.hypotheses.sort((a, b) => a.rank - b.rank);
+    // Defensive: ensure hypotheses array exists and sort safely
+    const hypotheses = Array.isArray(result?.hypotheses) ? result.hypotheses : [];
+    if (hypotheses.length === 0) {
+      hypotheses.push({
+        rank: 1,
+        description: `${input.triage.component} ${input.triage.type} incident requires investigation`,
+        evidence: [`Severity: ${input.triage.severity}`, `Component: ${input.triage.component}`],
+        confidence: 0.5,
+        blast_radius: 'Unknown — requires manual investigation',
+        suggested_fix: 'Investigate recent changes and logs for the affected component',
+      });
+    }
+    hypotheses.sort((a, b) => (a.rank || 0) - (b.rank || 0));
 
-    endTrace(traceKey, `Generated ${result.hypotheses.length} hypotheses, top confidence: ${result.hypotheses[0]?.confidence || 0}`);
+    const safeResult: HypothesisResult = { hypotheses };
+    endTrace(traceKey, `Generated ${hypotheses.length} hypotheses, top confidence: ${hypotheses[0]?.confidence || 0}`);
     const dur = performance.now() - agentStart;
-    logAgentEnd(input.incidentId, 'hypothesis', dur, `${result.hypotheses[0]?.description || 'no hypothesis'}`);
+    logAgentEnd(input.incidentId, 'hypothesis', dur, `${hypotheses[0]?.description || 'no hypothesis'}`);
     recordAgentDuration('hypothesis', dur);
-    return result;
+    return safeResult;
   } catch (error) {
     endTrace(traceKey, `Error: ${error instanceof Error ? error.message : 'Unknown'}`);
     throw error;

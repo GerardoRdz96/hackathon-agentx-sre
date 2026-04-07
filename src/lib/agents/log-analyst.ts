@@ -63,7 +63,7 @@ export async function runLogAnalystAgent(input: LogAnalysisInput): Promise<LogAn
     const correlationScore = Math.min(1, (errorCount * 0.15 + warnCount * 0.05));
 
     const result: LogAnalysisResult = {
-      patterns_found: analysis.patterns,
+      patterns_found: Array.isArray(analysis?.patterns) ? analysis.patterns : [],
       relevant_entries: allLogs.slice(0, 20).map(l => ({
         timestamp: l.timestamp,
         level: l.level,
@@ -71,7 +71,7 @@ export async function runLogAnalystAgent(input: LogAnalysisInput): Promise<LogAn
         message: l.message,
       })),
       correlation_score: Math.round(correlationScore * 100) / 100,
-      anomaly_summary: analysis.correlation,
+      anomaly_summary: typeof analysis?.correlation === 'string' ? analysis.correlation : 'Analysis inconclusive',
     };
 
     endTrace(traceKey, `Found ${result.patterns_found.length} patterns, ${result.relevant_entries.length} entries, correlation: ${result.correlation_score}`);

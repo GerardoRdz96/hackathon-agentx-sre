@@ -54,8 +54,8 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
     status: 'investigating',
   }).where(eq(incidents.id, input.incidentId)).run();
 
-  // Agents 2 + 3: Log Analyst and Code Analyst (in parallel)
-  const [logAnalysis, codeAnalysis] = await Promise.all([
+  // Agents 2 + 3: Log Analyst and Code Analyst (in parallel, fault-tolerant)
+  const [logResult, codeResult] = await Promise.allSettled([
     runLogAnalystAgent({
       incidentId: input.incidentId,
       description: input.description,
@@ -69,6 +69,17 @@ export async function runPipeline(input: PipelineInput): Promise<PipelineResult>
       type: triage.type,
     }),
   ]);
+
+  const logAnalysis: LogAnalysisResult = logResult.status === 'fulfilled'
+    ? logResult.value
+    : { patterns_found: [], relevant_entries: [], correlation_score: 0, anomaly_summary: 'Log analysis failed — proceeding with available data' };
+
+  const codeAnalysis: CodeAnalysisResult = codeResult.status === 'fulfilled'
+    ? codeResult.value
+    : { files_found: [], recent_changes: [], relevant_code_snippets: [], analysis: 'Code analysis failed — proceeding with available data', root_cause_likelihood: 'unknown' };
+
+  if (logResult.status === 'rejected') logError(input.incidentId, 'log-analyst', `Failed: ${logResult.reason}`);
+  if (codeResult.status === 'rejected') logError(input.incidentId, 'code-analyst', `Failed: ${codeResult.reason}`);
 
   // Agent 4: Hypothesis Generator
   const hypotheses = await runHypothesisAgent({

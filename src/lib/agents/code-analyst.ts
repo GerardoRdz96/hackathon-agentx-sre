@@ -74,8 +74,8 @@ export async function runCodeAnalystAgent(input: CodeAnalysisInput): Promise<Cod
       files_found: relevantFiles.map(f => f.path),
       recent_changes: recentChanges.map(f => ({ path: f.path, lastModified: f.lastModified })),
       relevant_code_snippets: snippetsWithConcerns.slice(0, 10),
-      analysis: analysis.analysis,
-      root_cause_likelihood: analysis.root_cause_likelihood,
+      analysis: typeof analysis?.analysis === 'string' ? analysis.analysis : 'Code analysis inconclusive',
+      root_cause_likelihood: typeof analysis?.root_cause_likelihood === 'string' ? analysis.root_cause_likelihood : 'medium',
     };
 
     endTrace(traceKey, `Found ${result.files_found.length} files, ${result.relevant_code_snippets.length} concerns, likelihood: ${result.root_cause_likelihood}`);

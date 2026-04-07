@@ -49,6 +49,10 @@ export default function Home() {
               5 Agents Online
             </span>
             <span>{allIncidents.length} incidents</span>
+            <span className="border-l border-gray-700 pl-4 flex items-center gap-1.5">
+              <span className="text-base">🐧</span>
+              <span className="text-gray-400 font-medium">Penguin Alley</span>
+            </span>
           </div>
         </div>
       </header>
