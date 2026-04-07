@@ -27,8 +27,12 @@ export function detectCanaryStrings(input: string): { safe: boolean; detected: s
 }
 
 export function sanitizeInput(input: string): string {
+  // Unicode normalization (NFKC) — defeats homoglyph attacks (Cyrillic о, fullwidth chars)
+  let sanitized = input.normalize('NFKC');
+  // Strip zero-width characters — defeats invisible character injection
+  sanitized = sanitized.replace(/[\u200B\u200C\u200D\uFEFF\u00AD]/g, '');
   // Strip HTML tags
-  let sanitized = input.replace(/<[^>]*>/g, '');
+  sanitized = sanitized.replace(/<[^>]*>/g, '');
   // Strip script content
   sanitized = sanitized.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
   // Remove null bytes

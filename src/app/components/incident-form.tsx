@@ -9,6 +9,7 @@ export function IncidentForm() {
   const [error, setError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [pipelineActive, setPipelineActive] = useState(false);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
 
@@ -31,8 +32,13 @@ export function IncidentForm() {
         throw new Error(data.error || 'Failed to submit incident');
       }
 
+      const result = await res.json();
       formRef.current?.reset();
       setFileName(null);
+      // Show success toast with pipeline timing
+      const duration = result.totalDurationMs ? `${(result.totalDurationMs / 1000).toFixed(1)}s` : '';
+      setSuccessMsg(`Incident #${result.incidentId} created. 5 agents triaged${duration ? ` in ${duration}` : ''}.`);
+      setTimeout(() => setSuccessMsg(null), 8000);
       // Small delay so user sees the stepper complete before refresh
       setTimeout(() => {
         setPipelineActive(false);
@@ -105,6 +111,13 @@ export function IncidentForm() {
         {error && (
           <div className="bg-red-900/30 border border-red-800 rounded-lg px-3 py-2 text-xs text-red-400">
             {error}
+          </div>
+        )}
+
+        {successMsg && (
+          <div className="bg-emerald-900/30 border border-emerald-700/50 rounded-lg px-3 py-2.5 flex items-center gap-2">
+            <span className="text-emerald-400 text-sm">✓</span>
+            <p className="text-xs text-emerald-300">{successMsg}</p>
           </div>
         )}
 

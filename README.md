@@ -26,17 +26,17 @@ INCIDENT IN (text + screenshot)
         |
   [Agent 1: TRIAGE]            Haiku   ~1s   Classify severity, component, type
         |
-  [Agent 2: LOG ANALYST]  ──┐  Sonnet  ~2s   Pattern-match across 200+ log entries
-  [Agent 3: CODE ANALYST]  ──┘  Sonnet  ~3s   Scan 9 source files for root cause
-        |                  PARALLEL
-  [Agent 4: HYPOTHESIS]         Sonnet  ~2s   Synthesize findings into ranked hypotheses
+  [Agent 2: LOG ANALYST]  ──┐  Sonnet  ~9s   Pattern-match across 200+ log entries
+  [Agent 3: CODE ANALYST]  ──┘  Sonnet  ~7s   Scan 9 source files for root cause
+        |                  PARALLEL (Promise.allSettled)
+  [Agent 4: HYPOTHESIS]         Sonnet  ~9s   Synthesize findings into ranked hypotheses
         |
-  [Agent 5: ROUTER]             Haiku   ~1s   Assign team, create ticket, notify
+  [Agent 5: ROUTER]             Deterministic  ~2ms   Assign team, create ticket, notify
         |
   TICKET + NOTIFICATIONS + FULL TRACE TIMELINE
 ```
 
-**Total pipeline: ~6-8 seconds** — a 91% reduction from manual triage.
+**Total pipeline: ~20-28 seconds** — a 99% reduction from the 47-minute industry average for manual triage.
 **Cost per incident: ~$0.01-0.02** (Haiku triage + Haiku routing ≈ 500 tokens, Sonnet analysis ≈ 2000 tokens). At 1,000 incidents/day: ~$15-20/day.
 
 ---
@@ -47,7 +47,7 @@ INCIDENT IN (text + screenshot)
 |---|---|
 | **5-Agent Pipeline** | Triage, Log Analyst, Code Analyst, Hypothesis Engine, Router — each with a dedicated system prompt and model |
 | **Multimodal Input** | Paste a Grafana dashboard screenshot or error page — Claude Vision extracts error patterns alongside text |
-| **Parallel Analysis** | Log Analyst and Code Analyst run concurrently via `Promise.all()`, cutting wall-clock time by ~3 seconds |
+| **Parallel Analysis** | Log Analyst and Code Analyst run concurrently via `Promise.allSettled()`, cutting wall-clock time by ~3 seconds |
 | **Observability (Logs + Traces + Metrics)** | Structured JSON logs (stdout), per-agent traces (SQLite + UI timeline), aggregated metrics (`/api/metrics` endpoint: incident counts, severity distribution, avg pipeline duration, per-agent latency) |
 | **Guardrails & Security** | Canary string detection, prompt injection pattern filtering, HTML stripping, input length validation, output truncation |
 | **Real Integrations** | Email notifications via [Resend](https://resend.com) (branded HTML), Telegram alerts via Bot API for critical incidents, Linear-style ticket UI. Graceful degradation if not configured |
@@ -175,7 +175,7 @@ Classifies the incident into **severity** (critical/high/medium/low), **componen
 
 ### 3. Log Analyst + Code Analyst (Sonnet, parallel, ~2-3s)
 
-Running concurrently via `Promise.all()`:
+Running concurrently via `Promise.allSettled()`:
 
 - **Log Analyst** searches 200+ simulated log entries filtered by the triaged component, identifies error patterns, timestamps, and anomalies
 - **Code Analyst** scans 9 Medusa.js source files for bugs matching the incident pattern — race conditions, missing null checks, incorrect error handling

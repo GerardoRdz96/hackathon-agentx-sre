@@ -84,13 +84,27 @@ export function MissionControl({ data, onResolve }: { data: MissionControlData; 
           <div className="p-4 space-y-3">
             <h3 className="font-medium text-gray-100">{incident.title}</h3>
             <p className="text-xs text-gray-400 leading-relaxed">{incident.description}</p>
-            {/* Triage Reasoning — extracted from triage trace output */}
+            {/* Triage Reasoning + Confidence Badge — extracted from triage trace */}
             {(() => {
               const triageTrace = trc.find(t => t.agent_name === 'triage');
+              const confidenceMatch = triageTrace?.output_summary?.match(/Confidence: ([\d.]+)/);
+              const confidence = confidenceMatch ? parseFloat(confidenceMatch[1]) : null;
               const reasoning = triageTrace?.output_summary?.match(/Confidence: [\d.]+\. (.+)/)?.[1];
+              const confColor = confidence !== null
+                ? confidence >= 0.8 ? 'bg-emerald-500/20 text-emerald-400'
+                : confidence >= 0.5 ? 'bg-yellow-500/20 text-yellow-400'
+                : 'bg-red-500/20 text-red-400'
+                : '';
               return reasoning ? (
                 <div className="bg-gray-800 rounded-lg p-2.5">
-                  <p className="text-[10px] text-gray-500 uppercase mb-1 font-bold tracking-wider">AI Reasoning</p>
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">AI Reasoning</p>
+                    {confidence !== null && (
+                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${confColor}`}>
+                        {(confidence * 100).toFixed(0)}% confidence
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-amber-400/90 leading-relaxed">{reasoning}</p>
                 </div>
               ) : null;

@@ -39,14 +39,15 @@ const TEAM_MAP: Record<string, { team: string; oncall: string }> = {
 };
 
 // Time-based routing — PA·co pattern from schedule-preflight.py
+// Uses Intl.DateTimeFormat for correct CST/CDT handling (no hardcoded offset)
 function getBusinessHoursContext(): { isBusinessHours: boolean; timezone: string; currentHour: number } {
   const now = new Date();
-  const cstOffset = -6; // CST (America/Monterrey)
-  const utcHour = now.getUTCHours();
-  const cstHour = (utcHour + cstOffset + 24) % 24;
+  const cstHour = parseInt(
+    new Intl.DateTimeFormat('en-US', { timeZone: 'America/Monterrey', hour: 'numeric', hour12: false }).format(now)
+  );
   return {
     isBusinessHours: cstHour >= 9 && cstHour < 18,
-    timezone: 'CST',
+    timezone: 'CST/CDT',
     currentHour: cstHour,
   };
 }

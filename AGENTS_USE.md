@@ -11,7 +11,7 @@
 | **System Name** | Incidex |
 | **Purpose** | AI-powered SRE incident triage — 5 specialized agents reduce Mean Time to Resolution from 47 minutes to 6–8 seconds (91% faster) |
 | **Tech Stack** | Next.js 15, TypeScript, Tailwind CSS 4, Anthropic Claude API (`@anthropic-ai/sdk`), SQLite + Drizzle ORM, Docker |
-| **LLM Provider** | Anthropic Claude — Haiku 4.5 (triage, routing) + Sonnet 4 (analysis, hypothesis, vision) |
+| **LLM Provider** | Anthropic Claude — Haiku 4.5 (triage) + Sonnet 4 (analysis, hypothesis, vision). Router is deterministic (no LLM). |
 | **Integrations** | Resend (branded HTML email), Telegram Bot API (critical alerts), SQLite (Linear-style ticketing) |
 | **Repository** | [github.com/GerardoRdz96/hackathon-agentx-sre](https://github.com/GerardoRdz96/hackathon-agentx-sre) |
 
@@ -89,7 +89,7 @@
 |---|---|
 | File | `src/lib/agents/hypothesis.ts` |
 | Model | `claude-sonnet-4-20250514` |
-| Output limit | 3,000 chars (stricter than default) |
+| Output limit | 8,000 chars |
 
 **Purpose:** Synthesize triage + log analysis + code analysis into ranked root-cause hypotheses with actionable fixes.
 
@@ -102,7 +102,7 @@
 | Field | Value |
 |---|---|
 | File | `src/lib/agents/router.ts` |
-| Model | `claude-haiku-4-5-20251001` |
+| Model | N/A — deterministic (rule-based, no LLM call) |
 | Storage | SQLite via Drizzle ORM |
 
 **Purpose:** Create ticket, assign to correct on-call engineer, send notifications.
@@ -144,7 +144,7 @@
  [4. Hypothesis Engine]   Sonnet   ~7s   Synthesize → ranked hypotheses
               |
               v
- [5. Router & Notifier]   Haiku    ~1ms  Ticket + email + Telegram
+ [5. Router & Notifier]   Deterministic  ~2ms  Ticket + email + Telegram (no LLM)
               |
  TICKET + NOTIFICATIONS + FULL TRACE TIMELINE
 ```
@@ -174,7 +174,7 @@ Each agent receives precisely the context it needs — no more, no less:
 1. **Triage** receives raw title + description + optional image. No logs, no code. Keeps classification fast and unbiased by preventing information leakage.
 2. **Log Analyst** receives incident description + triage output (component, type). Logs are pre-filtered by component using `searchLogs()` and capped at 80 entries to stay within context window limits.
 3. **Code Analyst** receives same triage output. Code files are pre-filtered by component match and limited to top 5 files. Recent git changes (48h window) are included for temporal correlation.
-4. **Hypothesis Engine** receives triage result + log analysis + code analysis — the full synthesis context. Output is capped at 3,000 chars to prevent downstream context overflow.
+4. **Hypothesis Engine** receives triage result + log analysis + code analysis — the full synthesis context. Output is capped at 8,000 chars to prevent downstream context overflow.
 5. **Router** receives triage severity/component + top hypothesis only. Minimal context for fast deterministic routing.
 
 ### Context Management Techniques
@@ -293,13 +293,13 @@ Implemented in `src/lib/guardrails.ts`. Every Claude API call passes through `va
 
 | Function | What it does |
 |---|---|
-| `detectCanaryStrings(input)` | Checks for 11 known prompt injection phrases (case-insensitive) |
+| `detectCanaryStrings(input)` | Checks for 10 known prompt injection phrases (case-insensitive) |
 | `sanitizeInput(input)` | Strips HTML tags, `<script>` blocks, null bytes, injection patterns |
 | `validateMaxLength(input)` | Rejects inputs longer than 10,000 characters |
 | `enforceOutputLength(output, max)` | Truncates at 5,000 chars (3,000 for hypothesis) + appends `[TRUNCATED]` |
 | `validateAndSanitize(input)` | Orchestrates all checks, returns sanitized string + warnings |
 
-### Canary Strings (11 patterns)
+### Canary Strings (10 patterns)
 
 ```
 "ignore previous instructions", "ignore all instructions", "disregard your instructions",
@@ -395,7 +395,7 @@ Defense: System prompt instructs "never speculate without evidence" + text evide
 | Log Analyst | Sonnet 4 | Pattern recognition across 80+ log entries requires stronger reasoning |
 | Code Analyst | Sonnet 4 | Code comprehension and root-cause analysis demand higher capability |
 | Hypothesis | Sonnet 4 | Multi-source synthesis into ranked hypotheses |
-| Router | Haiku 4.5 | Deterministic routing; speed critical for incident response |
+| Router | N/A (deterministic) | Rule-based team assignment; no LLM needed for routing |
 
 ### Scaling Approach
 
@@ -420,7 +420,7 @@ Defense: System prompt instructs "never speculate without evidence" + text evide
 ### What We'd Change
 
 - **Streaming agent output** would dramatically improve UX. Currently the UI waits for the full pipeline. Server-Sent Events showing each agent's output as it arrives would make the 20-second wait feel interactive.
-- **Deduplication** is missing. Submitting the same incident twice creates two pipelines. A similarity check (embedding distance or title fuzzy match) before triage would prevent wasted compute.
+- **Embedding-based deduplication** would improve duplicate detection. Current Jaccard word similarity works for identical titles but misses semantic duplicates ("Stripe timeout" vs "Payment processing errors"). Upgrading to OpenAI text-embedding-3-small with cosine similarity would catch these.
 - **Persistent error counters** would survive container restarts. Current metrics read from SQLite for historical data but session errors reset on reboot.
 
 ### Key Trade-offs
