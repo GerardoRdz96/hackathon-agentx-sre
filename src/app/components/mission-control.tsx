@@ -128,12 +128,12 @@ export function MissionControl({ data, onResolve }: { data: MissionControlData; 
               Notifications ({notifs.length})
             </span>
           </div>
-          <div className="p-4 space-y-2 max-h-[250px] overflow-y-auto">
+          <div className="p-4 space-y-2 max-h-[400px] overflow-y-auto">
             {notifs.length === 0 ? (
               <p className="text-xs text-gray-500">No notifications sent yet</p>
             ) : (
               notifs.map(notif => (
-                <div key={notif.id} className="bg-gray-800/50 rounded-lg p-2.5 overflow-hidden">
+                <div key={notif.id} className="bg-gray-800/50 rounded-lg p-2.5">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0 ${
                       notif.type === 'escalation' ? 'bg-red-500/20 text-red-400' :
@@ -142,9 +142,9 @@ export function MissionControl({ data, onResolve }: { data: MissionControlData; 
                     }`}>
                       {notif.type}
                     </span>
-                    <span className="text-[10px] text-gray-500 truncate">{notif.recipient}</span>
+                    <span className="text-[10px] text-gray-500 break-all">{notif.recipient}</span>
                   </div>
-                  <p className="text-xs text-gray-400 break-words">{notif.message}</p>
+                  <p className="text-xs text-gray-400 break-words leading-relaxed">{notif.message}</p>
                 </div>
               ))
             )}
