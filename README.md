@@ -50,7 +50,7 @@ INCIDENT IN (text + screenshot)
 | **Parallel Analysis** | Log Analyst and Code Analyst run concurrently via `Promise.all()`, cutting wall-clock time by ~3 seconds |
 | **Observability (Logs + Traces + Metrics)** | Structured JSON logs (stdout), per-agent traces (SQLite + UI timeline), aggregated metrics (`/api/metrics` endpoint: incident counts, severity distribution, avg pipeline duration, per-agent latency) |
 | **Guardrails & Security** | Canary string detection, prompt injection pattern filtering, HTML stripping, input length validation, output truncation |
-| **Mock Integrations** | Linear-style ticket creation, Slack/email notification simulation — ready to swap for real APIs |
+| **Real Integrations** | Email notifications via [Resend](https://resend.com) (branded HTML), Telegram alerts via Bot API for critical incidents, Linear-style ticket UI. Graceful degradation if not configured |
 | **Resolution Flow** | Mark incidents resolved from the dashboard — reporter is notified automatically |
 | **Dark Mission Control UI** | 5 agent panels with severity badges, real-time trace timeline, incident history |
 | **Simulated E-Commerce** | 9 Medusa.js source files with realistic bugs + 200+ log entries. Simulated data ensures **reproducible evaluation** — judges can run the full E2E flow without configuring external services. The adapter pattern means swapping to real Datadog/PagerDuty is a config change, not a rewrite |

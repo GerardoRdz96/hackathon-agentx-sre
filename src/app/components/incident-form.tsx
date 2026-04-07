@@ -2,17 +2,20 @@
 
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { PipelineStepper } from './pipeline-stepper';
 
 export function IncidentForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [pipelineActive, setPipelineActive] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
+    setPipelineActive(true);
     setError(null);
 
     const formData = new FormData(e.currentTarget);
@@ -30,9 +33,14 @@ export function IncidentForm() {
 
       formRef.current?.reset();
       setFileName(null);
-      router.refresh();
+      // Small delay so user sees the stepper complete before refresh
+      setTimeout(() => {
+        setPipelineActive(false);
+        router.refresh();
+      }, 500);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
+      setPipelineActive(false);
     } finally {
       setLoading(false);
     }
@@ -105,18 +113,10 @@ export function IncidentForm() {
           disabled={loading}
           className="w-full bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-sm rounded-lg px-4 py-2.5 transition-all"
         >
-          {loading ? (
-            <span className="flex items-center justify-center gap-2">
-              <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
-                <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor" className="opacity-75" />
-              </svg>
-              Running 5-Agent Pipeline...
-            </span>
-          ) : (
-            'Submit Incident'
-          )}
+          {loading ? 'Pipeline Running...' : 'Submit Incident'}
         </button>
+
+        <PipelineStepper active={pipelineActive} />
       </form>
     </div>
   );
