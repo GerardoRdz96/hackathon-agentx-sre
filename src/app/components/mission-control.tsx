@@ -11,7 +11,7 @@ interface MissionControlData {
   notifications: Notification[];
 }
 
-export function MissionControl({ data }: { data: MissionControlData }) {
+export function MissionControl({ data, onResolve }: { data: MissionControlData; onResolve?: () => void }) {
   const { incident, tickets: tix, traces: trc, notifications: notifs } = data;
   const router = useRouter();
   const [resolving, setResolving] = useState(false);
@@ -21,6 +21,7 @@ export function MissionControl({ data }: { data: MissionControlData }) {
     try {
       await fetch(`/api/incidents/${incident.id}/resolve`, { method: 'POST' });
       router.refresh();
+      onResolve?.();
     } catch {
       // ignore
     } finally {

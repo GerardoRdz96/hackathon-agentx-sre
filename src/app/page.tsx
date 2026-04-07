@@ -1,33 +1,15 @@
 import { db } from '@/lib/db';
-import { incidents, tickets, traces, notifications } from '@/lib/schema';
-import { desc, eq } from 'drizzle-orm';
+import { incidents } from '@/lib/schema';
+import { desc } from 'drizzle-orm';
 import { IncidentForm } from './components/incident-form';
-import { IncidentList } from './components/incident-list';
-import { MissionControl } from './components/mission-control';
+import { IncidentDashboard } from './components/incident-dashboard';
 
 export const dynamic = 'force-dynamic';
 
 export default function Home() {
-  // Initialize tables on first load
   initDb();
 
   const allIncidents = db.select().from(incidents).orderBy(desc(incidents.created_at)).all();
-
-  // Get the latest incident with full details for the mission control view
-  const latestIncident = allIncidents[0] || null;
-  let latestDetails = null;
-
-  if (latestIncident) {
-    const incidentTickets = db.select().from(tickets).where(eq(tickets.incident_id, latestIncident.id)).all();
-    const incidentTraces = db.select().from(traces).where(eq(traces.incident_id, latestIncident.id)).all();
-    const incidentNotifs = db.select().from(notifications).where(eq(notifications.incident_id, latestIncident.id)).all();
-    latestDetails = {
-      incident: latestIncident,
-      tickets: incidentTickets,
-      traces: incidentTraces,
-      notifications: incidentNotifs,
-    };
-  }
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
@@ -62,12 +44,10 @@ export default function Home() {
             <IncidentForm />
           </div>
           <div className="lg:col-span-2">
-            <IncidentList incidents={allIncidents} />
+            {/* Incident list + Mission Control with selection */}
+            <IncidentDashboard incidents={allIncidents} />
           </div>
         </div>
-
-        {/* Mission Control: 5-panel view of latest incident */}
-        {latestDetails && <MissionControl data={latestDetails} />}
       </main>
 
       {/* Footer */}

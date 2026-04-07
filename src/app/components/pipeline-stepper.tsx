@@ -66,14 +66,8 @@ export function PipelineStepper({ active }: PipelineStepperProps) {
       setActiveAgent(AGENTS.length); // all done
       setPhase('complete');
 
-      // Hide after 3 seconds
-      const hideTimer = setTimeout(() => {
-        setPhase('idle');
-        setActiveAgent(-1);
-        setElapsed(0);
-      }, 3000);
-
-      return () => clearTimeout(hideTimer);
+      // Stay visible — don't auto-hide. Judges need to see the completed pipeline.
+      // Will reset to 'idle' only when a new pipeline starts (active goes true).
     }
   }, [active]);
 
