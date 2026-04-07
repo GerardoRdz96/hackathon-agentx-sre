@@ -1,5 +1,6 @@
-// Simulated Medusa.js source code snippets for the code analyst agent to search
-// These represent a real e-commerce platform's key modules
+// Real Medusa.js source code from https://github.com/medusajs/medusa (MIT License)
+// These are actual production files from the Medusa e-commerce platform v2
+// Used by the Code Analyst agent to search for root causes during incident triage
 
 export interface CodeFile {
   path: string;
@@ -9,468 +10,974 @@ export interface CodeFile {
 
 export const MEDUSA_CODE_FILES: CodeFile[] = [
   {
-    path: 'src/services/payment.ts',
+    path: 'src/api/admin/payment-collections/[id]/mark-as-paid/route.ts',
     lastModified: '2026-04-05T14:30:00Z',
-    content: `import { PaymentService } from '@medusajs/medusa';
-import Stripe from 'stripe';
+    content: `import { markPaymentCollectionAsPaid } from "@medusajs/core-flows"
+import { HttpTypes } from "@medusajs/framework/types"
+import {
+  AuthenticatedMedusaRequest,
+  MedusaResponse,
+  refetchEntity,
+} from "@medusajs/framework/http"
 
-class CustomPaymentService extends PaymentService {
-  private stripe: Stripe;
+export const POST = async (
+  req: AuthenticatedMedusaRequest<
+    HttpTypes.AdminMarkPaymentCollectionAsPaid,
+    HttpTypes.SelectParams
+  >,
+  res: MedusaResponse<HttpTypes.AdminPaymentCollectionResponse>
+) => {
+  const { id } = req.params
 
-  constructor(container) {
-    super(container);
-    this.stripe = new Stripe(process.env.STRIPE_API_KEY!, { apiVersion: '2024-12-18.acacia' });
-  }
+  await markPaymentCollectionAsPaid(req.scope).run({
+    input: {
+      ...req.body,
+      payment_collection_id: id,
+      captured_by: req.auth_context.actor_id,
+    },
+  })
 
-  async createPayment(cart) {
-    try {
-      const intent = await this.stripe.paymentIntents.create({
-        amount: cart.total,
-        currency: cart.region.currency_code,
-        metadata: { cart_id: cart.id },
-      });
-      // BUG: Missing error handling for network timeouts
-      return { id: intent.id, status: intent.status };
-    } catch (error) {
-      // Only catches Stripe errors, not network errors
-      throw new Error(\`Payment failed: \${error.message}\`);
-    }
-  }
+  const paymentCollection = await refetchEntity({
+    entity: "payment_collection",
+    idOrFilter: id,
+    scope: req.scope,
+    fields: req.queryConfig.fields,
+  })
 
-  async capturePayment(paymentId: string) {
-    const intent = await this.stripe.paymentIntents.capture(paymentId);
-    // WARNING: No retry logic for transient failures
-    return { status: intent.status };
-  }
-
-  async refundPayment(paymentId: string, amount?: number) {
-    const refund = await this.stripe.refunds.create({
-      payment_intent: paymentId,
-      amount,
-    });
-    return { id: refund.id, status: refund.status };
-  }
+  res.status(200).json({ payment_collection: paymentCollection })
 }
-
-export default CustomPaymentService;`,
+`,
   },
   {
-    path: 'src/services/inventory.ts',
+    path: 'src/api/admin/inventory-items/[id]/route.ts',
     lastModified: '2026-04-04T09:15:00Z',
-    content: `import { InventoryService } from '@medusajs/medusa';
+    content: `import { MedusaError } from "@medusajs/framework/utils"
+import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
+import {
+  deleteInventoryItemWorkflow,
+  updateInventoryItemsWorkflow,
+} from "@medusajs/core-flows"
+import { refetchInventoryItem } from "../helpers"
+import { HttpTypes } from "@medusajs/framework/types"
 
-class CustomInventoryService extends InventoryService {
-  async adjustInventory(variantId: string, quantity: number) {
-    const variant = await this.retrieve(variantId);
-
-    // RACE CONDITION: No locking mechanism for concurrent updates
-    const newQuantity = variant.inventory_quantity + quantity;
-
-    if (newQuantity < 0) {
-      throw new Error('Insufficient inventory');
-    }
-
-    await this.update(variantId, { inventory_quantity: newQuantity });
-
-    // Check low stock threshold
-    if (newQuantity <= 5) {
-      await this.notifyLowStock(variantId, newQuantity);
-    }
-
-    return { variantId, newQuantity };
+export const GET = async (
+  req: MedusaRequest<HttpTypes.SelectParams>,
+  res: MedusaResponse<HttpTypes.AdminInventoryItemResponse>
+) => {
+  const { id } = req.params
+  const inventoryItem = await refetchInventoryItem(
+    id,
+    req.scope,
+    req.queryConfig.fields
+  )
+  if (!inventoryItem) {
+    throw new MedusaError(
+      MedusaError.Types.NOT_FOUND,
+      'Inventory item with id: ' + 'id} was not found'
+    )
   }
 
-  async reserveInventory(items: Array<{ variantId: string; quantity: number }>) {
-    // BUG: Not wrapped in transaction - partial failures leave inconsistent state
-    for (const item of items) {
-      await this.adjustInventory(item.variantId, -item.quantity);
-    }
-  }
-
-  private async notifyLowStock(variantId: string, quantity: number) {
-    console.log(\`Low stock alert: \${variantId} has \${quantity} units\`);
-    // TODO: Implement webhook notification
-  }
+  res.status(200).json({
+    inventory_item: inventoryItem,
+  })
 }
 
-export default CustomInventoryService;`,
+// Update inventory item
+export const POST = async (
+  req: MedusaRequest<
+    HttpTypes.AdminUpdateInventoryItem,
+    HttpTypes.SelectParams
+  >,
+  res: MedusaResponse<HttpTypes.AdminInventoryItemResponse>
+) => {
+  const { id } = req.params
+
+  await updateInventoryItemsWorkflow(req.scope).run({
+    input: {
+      updates: [{ id, ...req.validatedBody }],
+    },
+  })
+
+  const inventoryItem = await refetchInventoryItem(
+    id,
+    req.scope,
+    req.queryConfig.fields
+  )
+
+  res.status(200).json({
+    inventory_item: inventoryItem,
+  })
+}
+
+export const DELETE = async (
+  req: MedusaRequest,
+  res: MedusaResponse<HttpTypes.AdminInventoryItemDeleteResponse>
+) => {
+  const id = req.params.id
+  const deleteInventoryItems = deleteInventoryItemWorkflow(req.scope)
+
+  await deleteInventoryItems.run({
+    input: [id],
+  })
+
+  res.status(200).json({
+    id,
+    object: "inventory_item",
+    deleted: true,
+  })
+}
+`,
   },
   {
-    path: 'src/api/webhooks/stripe.ts',
-    lastModified: '2026-04-06T02:00:00Z',
-    content: `import { Router } from 'express';
-import Stripe from 'stripe';
-
-const router = Router();
-const stripe = new Stripe(process.env.STRIPE_API_KEY!);
-
-router.post('/webhooks/stripe', async (req, res) => {
-  const sig = req.headers['stripe-signature'];
-
-  let event: Stripe.Event;
-  try {
-    event = stripe.webhooks.constructEvent(
-      req.body,
-      sig as string,
-      process.env.STRIPE_WEBHOOK_SECRET!
-    );
-  } catch (err) {
-    console.error('Webhook signature verification failed:', err);
-    return res.status(400).send('Webhook Error');
-  }
-
-  // BUG: No idempotency check - duplicate events processed multiple times
-  switch (event.type) {
-    case 'payment_intent.succeeded':
-      await handlePaymentSuccess(event.data.object as Stripe.PaymentIntent);
-      break;
-    case 'payment_intent.payment_failed':
-      await handlePaymentFailure(event.data.object as Stripe.PaymentIntent);
-      break;
-    case 'charge.dispute.created':
-      await handleDispute(event.data.object);
-      break;
-    default:
-      console.log('Unhandled event type:', event.type);
-  }
-
-  res.json({ received: true });
-});
-
-async function handlePaymentSuccess(intent: Stripe.PaymentIntent) {
-  const orderId = intent.metadata.order_id;
-  // WARNING: No timeout on database operation
-  await updateOrderStatus(orderId, 'paid');
-  await sendConfirmationEmail(orderId);
-}
-
-async function handlePaymentFailure(intent: Stripe.PaymentIntent) {
-  const orderId = intent.metadata.order_id;
-  await updateOrderStatus(orderId, 'payment_failed');
-  // BUG: cart_id used in creation but order_id used here - mismatch
-}
-
-async function handleDispute(dispute: any) {
-  console.error('DISPUTE CREATED:', dispute.id);
-  // TODO: Implement proper dispute handling
-}
-
-async function updateOrderStatus(orderId: string, status: string) { /* db call */ }
-async function sendConfirmationEmail(orderId: string) { /* email service */ }
-
-export default router;`,
-  },
-  {
-    path: 'src/services/auth.ts',
+    path: 'src/api/auth/utils/generate-jwt-token.ts',
     lastModified: '2026-04-03T16:45:00Z',
-    content: `import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
+    content: `import {
+  AuthIdentityDTO,
+  MedusaContainer,
+  ProjectConfigOptions,
+} from "@medusajs/framework/types"
+import {
+  ContainerRegistrationKeys,
+  FeatureFlag,
+  generateJwtToken,
+} from "@medusajs/framework/utils"
+import { type Secret } from "jsonwebtoken"
+import RbacFeatureFlag from "../../../feature-flags/rbac"
 
-const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-change-me';
-const TOKEN_EXPIRY = '24h';
-
-export class AuthService {
-  async login(email: string, password: string) {
-    const customer = await this.findCustomerByEmail(email);
-    if (!customer) {
-      throw new Error('Invalid credentials');
-    }
-
-    const isValid = await bcrypt.compare(password, customer.password_hash);
-    if (!isValid) {
-      // WARNING: No rate limiting on login attempts
-      throw new Error('Invalid credentials');
-    }
-
-    const token = jwt.sign(
-      { customerId: customer.id, email: customer.email },
-      JWT_SECRET,
-      { expiresIn: TOKEN_EXPIRY }
-    );
-
-    return { token, customer: { id: customer.id, email: customer.email } };
-  }
-
-  async verifyToken(token: string) {
-    try {
-      return jwt.verify(token, JWT_SECRET);
-    } catch {
-      throw new Error('Invalid or expired token');
-    }
-  }
-
-  async findCustomerByEmail(email: string) {
-    // Simulated DB lookup
-    return null;
-  }
-}
-
-export default new AuthService();`,
+export async function generateJwtTokenForAuthIdentity(
+  {
+    authIdentity,
+    actorType,
+    authProvider,
+    container,
+  }: {
+    authIdentity: AuthIdentityDTO
+    actorType: string
+    authProvider?: string
+    container?: MedusaContainer
   },
   {
-    path: 'src/api/middleware/rate-limiter.ts',
+    secret,
+    expiresIn,
+    options,
+  }: {
+    secret: Secret
+    expiresIn: string | undefined
+    options?: ProjectConfigOptions["http"]["jwtOptions"]
+  }
+) {
+  const expiresIn_ = expiresIn ?? options?.expiresIn
+  const entityIdKey = '' + 'actorType}_id'
+  const entityId = authIdentity?.app_metadata?.[entityIdKey] as
+    | string
+    | undefined
+
+  const providerIdentity = !authProvider
+    ? undefined
+    : authIdentity.provider_identities?.filter(
+        (identity) => identity.provider === authProvider
+      )[0]
+
+  let roles: string[] | undefined
+
+  if (FeatureFlag.isFeatureEnabled(RbacFeatureFlag.key)) {
+    if (container && entityId) {
+      try {
+        const query = container.resolve(ContainerRegistrationKeys.QUERY)
+        const { data: userRoles } = await query.graph({
+          entity: actorType,
+          fields: ["rbac_roles.id"],
+          filters: {
+            id: entityId,
+          },
+        })
+
+        if (userRoles?.[0]?.rbac_roles) {
+          roles = userRoles[0].rbac_roles.map((role) => role.id)
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  return generateJwtToken(
+    {
+      actor_id: entityId ?? "",
+      actor_type: actorType,
+      auth_identity_id: authIdentity?.id ?? "",
+      app_metadata: {
+        [entityIdKey]: entityId,
+        roles,
+      },
+      user_metadata: providerIdentity?.user_metadata ?? {},
+    },
+    {
+      secret,
+      expiresIn: expiresIn_,
+      jwtOptions: options,
+    }
+  )
+}
+`,
+  },
+  {
+    path: 'src/subscribers/payment-webhook.ts',
+    lastModified: '2026-04-05T14:30:00Z',
+    content: `import { processPaymentWorkflowId } from "@medusajs/core-flows"
+import {
+  IPaymentModuleService,
+  ProviderWebhookPayload,
+} from "@medusajs/framework/types"
+import {
+  Modules,
+  PaymentActions,
+  PaymentWebhookEvents,
+} from "@medusajs/framework/utils"
+import { SubscriberArgs, SubscriberConfig } from "../types/subscribers"
+
+type SerializedBuffer = {
+  data: ArrayBuffer
+  type: "Buffer"
+}
+
+export default async function paymentWebhookhandler({
+  event,
+  container,
+}: SubscriberArgs<ProviderWebhookPayload>) {
+  const paymentService: IPaymentModuleService = container.resolve(
+    Modules.PAYMENT
+  )
+
+  const input = event.data
+
+  if (
+    (input.payload?.rawData as unknown as SerializedBuffer)?.type === "Buffer"
+  ) {
+    input.payload.rawData = Buffer.from(
+      (input.payload.rawData as unknown as SerializedBuffer).data
+    )
+  }
+
+  const processedEvent = await paymentService.getWebhookActionAndData(input)
+
+  if (!processedEvent.data) {
+    return
+  }
+
+  if (
+    processedEvent?.action === PaymentActions.NOT_SUPPORTED ||
+    // We currently don't handle these payment statuses in the processPayment function.
+    processedEvent?.action === PaymentActions.CANCELED ||
+    processedEvent?.action === PaymentActions.FAILED ||
+    processedEvent?.action === PaymentActions.REQUIRES_MORE
+  ) {
+    return
+  }
+
+  const wfEngine = container.resolve(Modules.WORKFLOW_ENGINE)
+  await wfEngine.run(processPaymentWorkflowId, { input: processedEvent })
+}
+
+export const config: SubscriberConfig = {
+  event: PaymentWebhookEvents.WebhookReceived,
+  context: {
+    subscriberId: "payment-webhook-handler",
+  },
+}
+`,
+  },
+  {
+    path: 'src/api/store/carts/[id]/complete/route.ts',
     lastModified: '2026-04-05T11:00:00Z',
-    content: `// Simple in-memory rate limiter
-// WARNING: Does not work in multi-instance deployments (no shared state)
+    content: `import { completeCartWorkflowId } from "@medusajs/core-flows"
+import { prepareRetrieveQuery } from "@medusajs/framework"
+import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
+import { HttpTypes } from "@medusajs/framework/types"
+import {
+  ContainerRegistrationKeys,
+  MedusaError,
+  Modules,
+} from "@medusajs/framework/utils"
+import { refetchCart } from "../../helpers"
+import { defaultStoreCartFields } from "../../query-config"
 
-const requestCounts = new Map<string, { count: number; resetAt: number }>();
+export const POST = async (
+  req: MedusaRequest<{}, HttpTypes.SelectParams>,
+  res: MedusaResponse<HttpTypes.StoreCompleteCartResponse>
+) => {
+  const cart_id = req.params.id
+  const we = req.scope.resolve(Modules.WORKFLOW_ENGINE)
 
-export function rateLimiter(maxRequests: number = 100, windowMs: number = 60000) {
-  return (req: any, res: any, next: any) => {
-    const key = req.ip || req.headers['x-forwarded-for'] || 'unknown';
-    const now = Date.now();
+  const { errors, result, transaction } = await we.run(completeCartWorkflowId, {
+    input: { id: cart_id },
+    throwOnError: false,
+  })
 
-    let entry = requestCounts.get(key);
-    if (!entry || now > entry.resetAt) {
-      entry = { count: 0, resetAt: now + windowMs };
-      requestCounts.set(key, entry);
-    }
-
-    entry.count++;
-
-    if (entry.count > maxRequests) {
-      return res.status(429).json({ error: 'Too many requests' });
-    }
-
-    // BUG: Memory leak - old entries never cleaned up
-    next();
-  };
-}`,
-  },
-  {
-    path: 'src/services/order.ts',
-    lastModified: '2026-04-05T18:20:00Z',
-    content: `import { OrderService } from '@medusajs/medusa';
-
-class CustomOrderService extends OrderService {
-  async createOrder(cartId: string) {
-    const cart = await this.cartService.retrieve(cartId, {
-      relations: ['items', 'payment', 'shipping_methods'],
-    });
-
-    // Validate cart has payment
-    if (!cart.payment) {
-      throw new Error('Cart has no payment');
-    }
-
-    // BUG: Race condition between payment verification and order creation
-    const order = await super.createWithPayment(cartId);
-
-    // Post-order processing
-    try {
-      await this.inventoryService.reserveInventory(
-        cart.items.map(i => ({ variantId: i.variant_id, quantity: i.quantity }))
-      );
-    } catch (error) {
-      // WARNING: Order created but inventory not reserved - inconsistent state
-      console.error('Failed to reserve inventory for order:', order.id, error);
-      // Does not roll back the order
-    }
-
-    await this.eventBus.emit('order.placed', { id: order.id });
-    return order;
+  if (!transaction.hasFinished()) {
+    throw new MedusaError(
+      MedusaError.Types.CONFLICT,
+      "Cart is already being completed by another request"
+    )
   }
 
-  async cancelOrder(orderId: string) {
-    const order = await this.retrieve(orderId, { relations: ['items'] });
+  const query = req.scope.resolve(ContainerRegistrationKeys.QUERY)
 
-    // Release inventory
-    for (const item of order.items) {
-      await this.inventoryService.adjustInventory(item.variant_id, item.quantity);
+  // When an error occurs on the workflow, its potentially got to with cart validations, payments
+  // or inventory checks. Return the cart here along with errors for the consumer to take more action
+  // and fix them
+  if (errors?.[0]) {
+    const error = errors[0].error
+    const statusOKErrors: string[] = [
+      // TODO: add inventory specific errors
+      MedusaError.Types.PAYMENT_AUTHORIZATION_ERROR,
+      MedusaError.Types.PAYMENT_REQUIRES_MORE_ERROR,
+    ]
+
+    // If we end up with errors outside of statusOKErrors, it means that the cart is not in a state to be
+    // completed. In these cases, we return a 400.
+    const cartReq = await prepareRetrieveQuery(
+      {},
+      {
+        defaults: defaultStoreCartFields,
+      },
+      req as MedusaRequest
+    )
+    const cart = await refetchCart(
+      cart_id,
+      req.scope,
+      cartReq.remoteQueryConfig.fields
+    )
+
+    if (!statusOKErrors.includes(error?.type)) {
+      throw error
     }
 
-    // Process refund
-    await this.paymentService.refundPayment(order.payment_id);
-
-    return await this.update(orderId, { status: 'canceled' });
+    res.status(200).json({
+      type: "cart",
+      cart,
+      error: {
+        message: error.message,
+        name: error.name,
+        type: error.type,
+      },
+    })
+    return
   }
+
+  const { data } = await query.graph({
+    entity: "order",
+    fields: req.queryConfig.fields,
+    filters: { id: result.id },
+  })
+
+  res.status(200).json({
+    type: "order",
+    order: data[0],
+  })
 }
-
-export default CustomOrderService;`,
+`,
   },
   {
-    path: 'src/api/routes/products.ts',
-    lastModified: '2026-04-04T13:00:00Z',
-    content: `import { Router } from 'express';
-
-const router = Router();
-
-router.get('/store/products', async (req, res) => {
-  try {
-    const { limit = 20, offset = 0, category } = req.query;
-
-    // WARNING: No input validation on limit/offset - potential DoS
-    const products = await req.scope.resolve('productService').list(
-      { ...(category && { category_id: [category] }) },
-      { take: Number(limit), skip: Number(offset), relations: ['variants', 'images'] }
-    );
-
-    res.json({ products, count: products.length });
-  } catch (error) {
-    console.error('Product listing error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-router.get('/store/products/:id', async (req, res) => {
-  try {
-    const product = await req.scope.resolve('productService').retrieve(
-      req.params.id,
-      { relations: ['variants', 'images', 'options'] }
-    );
-    res.json({ product });
-  } catch (error) {
-    // BUG: Returns 500 for not-found instead of 404
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-export default router;`,
-  },
-  {
-    path: 'src/subscribers/order-notification.ts',
-    lastModified: '2026-04-05T20:00:00Z',
-    content: `class OrderNotificationSubscriber {
-  constructor({ eventBusService, notificationService }) {
-    eventBusService.subscribe('order.placed', this.handleOrderPlaced);
-    eventBusService.subscribe('order.canceled', this.handleOrderCanceled);
-    eventBusService.subscribe('order.refund_created', this.handleRefund);
-  }
-
-  handleOrderPlaced = async (data: { id: string }) => {
-    // WARNING: No dead letter queue - failed notifications are lost
-    try {
-      await this.sendEmail(data.id, 'order_confirmation');
-      await this.sendSlackNotification(data.id, 'New order placed');
-    } catch (error) {
-      console.error('Notification failed for order:', data.id, error);
-      // Swallows error - no retry mechanism
-    }
-  };
-
-  handleOrderCanceled = async (data: { id: string }) => {
-    await this.sendEmail(data.id, 'order_canceled');
-  };
-
-  handleRefund = async (data: { id: string }) => {
-    await this.sendEmail(data.id, 'refund_processed');
-  };
-
-  private async sendEmail(orderId: string, template: string) {
-    // Simulated email sending
-    console.log(\`Sending \${template} email for order \${orderId}\`);
-  }
-
-  private async sendSlackNotification(orderId: string, message: string) {
-    // BUG: Hardcoded webhook URL, should be env variable
-    const webhookUrl = 'https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXX';
-    // fetch(webhookUrl, { method: 'POST', body: JSON.stringify({ text: message }) });
-  }
-}
-
-export default OrderNotificationSubscriber;`,
-  },
-  {
-    path: 'src/loaders/database.ts',
+    path: 'src/commands/db/create.ts',
     lastModified: '2026-04-02T08:30:00Z',
-    content: `import { DataSource } from 'typeorm';
+    content: `import input from "@inquirer/input"
+import type { Logger } from "@medusajs/framework/types"
+import {
+  ContainerRegistrationKeys,
+  createClient,
+  createDb,
+  dbExists,
+  EnvEditor,
+  parseConnectionString,
+} from "@medusajs/framework/utils"
+import { basename } from "path"
+import slugify from "slugify"
+import { initializeContainer } from "../../loaders"
 
-const AppDataSource = new DataSource({
-  type: 'postgres',
-  url: process.env.DATABASE_URL,
-  entities: ['dist/models/*.js'],
-  migrations: ['dist/migrations/*.js'],
-  logging: process.env.NODE_ENV === 'development',
-  // WARNING: No connection pool limits set - defaults may be too high
-  // WARNING: No query timeout configured
-  extra: {
-    // BUG: SSL disabled in production for "convenience"
-    ssl: process.env.NODE_ENV === 'production' ? false : false,
-  },
-});
-
-export async function initializeDatabase() {
+async function connectClient(client: ReturnType<typeof createClient>) {
   try {
-    await AppDataSource.initialize();
-    console.log('Database connected');
-
-    // Run pending migrations
-    await AppDataSource.runMigrations();
-    console.log('Migrations complete');
+    await client.connect()
+    return { connected: true, error: null }
   } catch (error) {
-    console.error('Database initialization failed:', error);
-    // BUG: Process continues even if DB connection fails
+    return { connected: false, error }
   }
 }
 
-export default AppDataSource;`,
+/**
+ * A low-level utility to create the database. This util should
+ * never exit the process implicitly.
+ */
+export async function dbCreate({
+  db,
+  directory,
+  interactive,
+  logger,
+}: {
+  db: string | undefined
+  directory: string
+  interactive: boolean
+  logger: Logger
+}): Promise<boolean> {
+  let dbName = db
+
+  /**
+   * Loading the ".env" file in editor mode so that
+   * we can read values from it and update its
+   * contents.
+   */
+  const envEditor = new EnvEditor(directory)
+  await envEditor.load()
+
+  /**
+   * Ensure the "DATABASE_URL" is defined before we attempt to
+   * create the database.
+   *
+   * Also we will discard the database name from the connection
+   * string because the mentioned database might not exist
+   */
+  const dbConnectionString = envEditor.get("DATABASE_URL")
+  if (!dbConnectionString) {
+    logger.error(
+      'Missing "DATABASE_URL" inside the .env file. The value is required to connect to the PostgreSQL server'
+    )
+    return false
+  }
+
+  /**
+   * Use default value + prompt only when the dbName is not
+   * provided via a flag
+   */
+  if (!dbName) {
+    const defaultValue =
+      envEditor.get("DB_NAME") ?? 'medusa-' + 'slugify(basename(directory))}'
+    if (interactive) {
+      dbName = await input({
+        message: "Enter the database name",
+        default: defaultValue,
+        required: true,
+      })
+    } else {
+      dbName = defaultValue
+    }
+  }
+
+  /**
+   * Parse connection string specified as "DATABASE_URL" inside the
+   * .env file and create a client instance from it.
+   */
+  const connectionOptions = parseConnectionString(dbConnectionString)
+
+  /**
+   * The following client config is without any database name. This is because
+   * we want to connect to the default database (whatever it is) and create
+   * a new database that we expect not to exist.
+   */
+  const clientConfig = {
+    host: connectionOptions.host!,
+    port: connectionOptions.port ? Number(connectionOptions.port) : undefined,
+    user: connectionOptions.user,
+    password: connectionOptions.password,
+    ...(connectionOptions.ssl ? { ssl: connectionOptions.ssl as any } : {}),
+  }
+
+  /**
+   * In some case the default database (which is same as the username) does
+   * not exist. For example: With Neon, there is no database name after
+   * the connection username. Hence, we will have to connect with the
+   * postgres database.
+   */
+  const clientConfigWithPostgresDB = {
+    host: connectionOptions.host!,
+    port: connectionOptions.port ? Number(connectionOptions.port) : undefined,
+    user: connectionOptions.user,
+    database: "postgres",
+    password: connectionOptions.password,
+    ...(connectionOptions.ssl ? { ssl: connectionOptions.ssl as any } : {}),
+  }
+
+  /**
+   * First connect with the default DB
+   */
+  let client = createClient(clientConfig)
+  let connectionState = await connectClient(client)
+
+  /**
+   * In case of an error, connect with the postgres DB
+   */
+  if (!connectionState.connected) {
+    client = createClient(clientConfigWithPostgresDB)
+    connectionState = await connectClient(client)
+  }
+
+  /**
+   * Notify user about the connection state
+   */
+  if (!connectionState.connected) {
+    logger.error(
+      "Unable to establish database connection because of the following error"
+    )
+    logger.error(connectionState.error)
+    return false
+  }
+
+  logger.info('Connection established with the database "' + 'dbName}"')
+  if (await dbExists(client, dbName)) {
+    logger.info('Database "' + 'dbName}" already exists')
+
+    envEditor.set("DB_NAME", dbName, { withEmptyTemplateValue: true })
+    await envEditor.save()
+    logger.info('Updated .env file with "DB_NAME=' + 'dbName}"')
+
+    return true
+  }
+
+  await createDb(client, dbName)
+  logger.info('Created database "' + 'dbName}"')
+
+  envEditor.set("DB_NAME", dbName)
+  await envEditor.save()
+  logger.info('Updated .env file with "DB_NAME=' + 'dbName}"')
+  return true
+}
+
+const main = async function ({ directory, interactive, db }) {
+  const container = await initializeContainer(directory, {
+    skipDbConnection: true,
+  })
+  const logger = container.resolve(ContainerRegistrationKeys.LOGGER)
+
+  try {
+    const created = await dbCreate({ directory, interactive, db, logger })
+    process.exit(created ? 0 : 1)
+  } catch (error) {
+    if (error.name === "ExitPromptError") {
+      process.exit()
+    }
+    logger.error(error)
+    process.exit(1)
+  }
+}
+
+export default main
+`,
   },
   {
-    path: 'src/api/middleware/error-handler.ts',
+    path: 'src/api/store/products/route.ts',
+    lastModified: '2026-04-04T13:00:00Z',
+    content: `import { MedusaResponse } from "@medusajs/framework/http"
+import { HttpTypes, QueryContextType } from "@medusajs/framework/types"
+import {
+  ContainerRegistrationKeys,
+  FeatureFlag,
+  isPresent,
+  QueryContext,
+} from "@medusajs/framework/utils"
+import IndexEngineFeatureFlag from "../../../feature-flags/index-engine"
+import { wrapVariantsWithInventoryQuantityForSalesChannel } from "../../utils/middlewares"
+import { RequestWithContext, wrapProductsWithTaxPrices } from "./helpers"
+
+export const GET = async (
+  req: RequestWithContext<HttpTypes.StoreProductListParams>,
+  res: MedusaResponse<HttpTypes.StoreProductListResponse>
+) => {
+  if (FeatureFlag.isFeatureEnabled(IndexEngineFeatureFlag.key)) {
+    // TODO: These filters are not supported by the index engine yet
+    if (
+      isPresent(req.filterableFields.tags) ||
+      isPresent(req.filterableFields.categories)
+    ) {
+      return await getProducts(req, res)
+    }
+
+    return await getProductsWithIndexEngine(req, res)
+  }
+
+  return await getProducts(req, res)
+}
+
+async function getProductsWithIndexEngine(
+  req: RequestWithContext<HttpTypes.StoreProductListParams>,
+  res: MedusaResponse<HttpTypes.StoreProductListResponse>
+) {
+  const query = req.scope.resolve(ContainerRegistrationKeys.QUERY)
+
+  const context: QueryContextType = {}
+  const withInventoryQuantity = req.queryConfig.fields.some((field) =>
+    field.includes("variants.inventory_quantity")
+  )
+
+  if (withInventoryQuantity) {
+    req.queryConfig.fields = req.queryConfig.fields.filter(
+      (field) => !field.includes("variants.inventory_quantity")
+    )
+  }
+
+  if (isPresent(req.pricingContext)) {
+    context["variants"] ??= {}
+    context["variants"]["calculated_price"] ??= QueryContext(
+      req.pricingContext!
+    )
+  }
+
+  const filters: Record<string, any> = req.filterableFields
+  if (isPresent(filters.sales_channel_id)) {
+    const salesChannelIds = filters.sales_channel_id
+
+    filters["sales_channels"] ??= {}
+    filters["sales_channels"]["id"] = salesChannelIds
+
+    delete filters.sales_channel_id
+  }
+
+  const { data: products = [], metadata } = await query.index(
+    {
+      entity: "product",
+      fields: req.queryConfig.fields,
+      filters,
+      pagination: req.queryConfig.pagination,
+      context,
+    },
+    {
+      cache: {
+        enable: true,
+      },
+      locale: req.locale,
+    }
+  )
+
+  if (withInventoryQuantity) {
+    await wrapVariantsWithInventoryQuantityForSalesChannel(
+      req,
+      products.map((product) => product.variants).flat(1)
+    )
+  }
+
+  await wrapProductsWithTaxPrices(req, products)
+
+  res.json({
+    products,
+    count: metadata!.estimate_count,
+    estimate_count: metadata!.estimate_count,
+    offset: metadata!.skip,
+    limit: metadata!.take,
+  })
+}
+
+async function getProducts(
+  req: RequestWithContext<HttpTypes.StoreProductListParams>,
+  res: MedusaResponse<HttpTypes.StoreProductListResponse>
+) {
+  const query = req.scope.resolve(ContainerRegistrationKeys.QUERY)
+  const context: object = {}
+  const withInventoryQuantity = req.queryConfig.fields.some((field) =>
+    field.includes("variants.inventory_quantity")
+  )
+
+  if (withInventoryQuantity) {
+    req.queryConfig.fields = req.queryConfig.fields.filter(
+      (field) => !field.includes("variants.inventory_quantity")
+    )
+  }
+
+  if (isPresent(req.pricingContext)) {
+    context["variants"] ??= {}
+    context["variants"]["calculated_price"] ??= QueryContext(
+      req.pricingContext!
+    )
+  }
+
+  const { data: products = [], metadata } = await query.graph(
+    {
+      entity: "product",
+      fields: req.queryConfig.fields,
+      filters: req.filterableFields,
+      pagination: req.queryConfig.pagination,
+      context,
+    },
+    {
+      cache: {
+        enable: true,
+      },
+      locale: req.locale,
+    }
+  )
+
+  if (withInventoryQuantity) {
+    await wrapVariantsWithInventoryQuantityForSalesChannel(
+      req,
+      products.map((product) => product.variants).flat(1)
+    )
+  }
+
+  await wrapProductsWithTaxPrices(req, products)
+
+  res.json({
+    products,
+    count: metadata!.count,
+    offset: metadata!.skip,
+    limit: metadata!.take,
+  })
+}
+`,
+  },
+  {
+    path: 'src/loaders/api.ts',
     lastModified: '2026-04-05T15:00:00Z',
-    content: `export function errorHandler(err: any, req: any, res: any, next: any) {
-  console.error('Unhandled error:', err);
+    content: `import { ConfigModule } from "@medusajs/framework/config"
+import { ApiLoader } from "@medusajs/framework/http"
+import { MedusaContainer, PluginDetails } from "@medusajs/framework/types"
+import { FeatureFlag } from "@medusajs/framework/utils"
+import { Express } from "express"
+import { join } from "path"
+import qs from "qs"
 
-  // WARNING: Leaks stack trace in production
-  const response = {
-    error: err.message || 'Internal server error',
-    ...(process.env.NODE_ENV !== 'production' && { stack: err.stack }),
-    code: err.code || 'INTERNAL_ERROR',
-  };
+type Options = {
+  app: Express
+  plugins: PluginDetails[]
+  container: MedusaContainer
+}
 
-  // BUG: Always returns 500, doesn't check for known error types
-  const statusCode = err.statusCode || 500;
+export default async ({ app, container, plugins }: Options) => {
+  // This is a workaround for the issue described here: https://github.com/expressjs/express/issues/3454
+  // We parse the url and get the qs to be parsed and override the query prop from the request
+  app.use(function (req, res, next) {
+    const parsedUrl = req.url.split("?")
+    parsedUrl.shift()
+    const queryParamsStr = parsedUrl.join("?")
+    if (queryParamsStr) {
+      req.query = qs.parse(queryParamsStr, { arrayLimit: Infinity })
+    }
+    next()
+  })
 
-  res.status(statusCode).json(response);
-}`,
+  // Store the initial router stack length before loading API resources for HMR
+  if (FeatureFlag.isFeatureEnabled("backend_hmr")) {
+    const initialStackLength = (app as any)._router?.stack?.length ?? 0
+    ;(global as any).__MEDUSA_HMR_INITIAL_STACK_LENGTH__ = initialStackLength
+  }
+
+  const sourcePaths: string[] = []
+
+  /**
+   * Always load plugin routes before the Medusa core routes, since it
+   * will allow the plugin to define routes with higher priority
+   * than Medusa. Here are couple of examples.
+   *
+   * - Plugin registers a route called "/products/active"
+   * - Medusa registers a route called "/products/:id"
+   *
+   * Now, if Medusa routes gets registered first, then the "/products/active"
+   * route will never be resolved, because it will be handled by the
+   * "/products/:id" route.
+   */
+  sourcePaths.push(
+    join(__dirname, "../api"),
+    ...plugins.map((pluginDetails) => {
+      return join(pluginDetails.resolve, "api")
+    })
+  )
+
+  const {
+    projectConfig: {
+      http: { restrictedFields },
+    },
+  } = container.resolve<ConfigModule>("configModule")
+
+  // TODO: Figure out why this is causing issues with test when placed inside ./api.ts
+  // Adding this here temporarily
+  // Test: (packages/medusa/src/api/routes/admin/currencies/update-currency.ts)
+  try {
+    await new ApiLoader({
+      app: app,
+      sourceDir: sourcePaths,
+      baseRestrictedFields: restrictedFields?.store,
+      container,
+    }).load()
+  } catch (err) {
+    throw Error(
+      'An error occurred while registering API Routes. Error: ' + 'err.message}'
+    )
+  }
+
+  return app
+}
+`,
+  },
+  {
+    path: 'src/api/admin/draft-orders/route.ts',
+    lastModified: '2026-04-05T11:00:00Z',
+    content: `import {
+  createOrderWorkflow,
+  getOrdersListWorkflow,
+} from "@medusajs/core-flows"
+import {
+  AuthenticatedMedusaRequest,
+  MedusaRequest,
+  MedusaResponse,
+} from "@medusajs/framework/http"
+import {
+  AdditionalData,
+  CreateOrderDTO,
+  HttpTypes,
+  OrderDTO,
+} from "@medusajs/framework/types"
+import {
+  ContainerRegistrationKeys,
+  OrderStatus,
+  remoteQueryObjectFromString,
+} from "@medusajs/framework/utils"
+import { refetchOrder } from "./helpers"
+
+export const GET = async (
+  req: MedusaRequest<HttpTypes.AdminOrderFilters>,
+  res: MedusaResponse<HttpTypes.AdminDraftOrderListResponse>
+) => {
+  const variables = {
+    filters: {
+      ...req.filterableFields,
+      is_draft_order: true,
+    },
+    ...req.queryConfig.pagination,
+  }
+
+  const workflow = getOrdersListWorkflow(req.scope)
+  const { result } = await workflow.run({
+    input: {
+      fields: req.queryConfig.fields,
+      variables,
+    },
+  })
+
+  const { rows, metadata } = result as {
+    rows: OrderDTO[]
+    metadata: any
+  }
+  res.json({
+    draft_orders: rows as unknown as HttpTypes.AdminOrder[],
+    count: metadata.count,
+    offset: metadata.skip,
+    limit: metadata.take,
+  })
+}
+
+export const POST = async (
+  req: AuthenticatedMedusaRequest<
+    HttpTypes.AdminCreateDraftOrder & AdditionalData,
+    HttpTypes.AdminDraftOrderParams
+  >,
+  res: MedusaResponse<HttpTypes.AdminDraftOrderResponse>
+) => {
+  const input = req.validatedBody
+  const workflowInput = {
+    ...input,
+    no_notification: !!input.no_notification_order,
+    status: OrderStatus.DRAFT,
+    is_draft_order: true,
+  } as CreateOrderDTO & AdditionalData
+
+  const remoteQuery = req.scope.resolve(ContainerRegistrationKeys.REMOTE_QUERY)
+
+  /**
+   * If the currency code is not provided, we fetch the region and use the currency code from there.
+   */
+  if (!workflowInput.currency_code) {
+    const queryObject = remoteQueryObjectFromString({
+      entryPoint: "region",
+      variables: {
+        filters: { id: input.region_id },
+      },
+      fields: ["currency_code"],
+    })
+    const [region] = await remoteQuery(queryObject)
+    workflowInput.currency_code = region?.currency_code
+  }
+
+  /**
+   * If the email is not provided, we fetch the customer and use the email from there.
+   */
+  if (!workflowInput.email) {
+    const queryObject = remoteQueryObjectFromString({
+      entryPoint: "customer",
+      variables: {
+        filters: { id: input.customer_id },
+      },
+      fields: ["email"],
+    })
+    const [customer] = await remoteQuery(queryObject)
+    workflowInput.email = customer?.email
+  }
+
+  /**
+   * We accept either a ID or a payload for both billing and shipping addresses.
+   * If either field was received as a string, we assume it's an ID and
+   * then ensure that it is passed along correctly to the workflow.
+   */
+  if (typeof input.billing_address === "string") {
+    workflowInput.billing_address_id = input.billing_address
+    delete workflowInput.billing_address
+  }
+
+  if (typeof input.shipping_address === "string") {
+    workflowInput.shipping_address_id = input.shipping_address
+    delete workflowInput.shipping_address
+  }
+
+  const { result } = await createOrderWorkflow(req.scope).run({
+    input: workflowInput,
+  })
+
+  const draftOrder = await refetchOrder(
+    result.id,
+    req.scope,
+    req.queryConfig.fields
+  )
+
+  res.status(200).json({ draft_order: draftOrder })
+}
+`,
   },
 ];
 
-// Simulated git log for "recent deployments"
-export const SIMULATED_GIT_LOG = `commit a3f8c2d (HEAD -> main, origin/main)
-Author: deploy-bot <deploy@medusa-store.com>
-Date:   Sun Apr 6 02:00:00 2026 -0600
-    fix: update stripe webhook handler for new event types
-
-commit 7e91b4a
+export const SIMULATED_GIT_LOG = `commit a3f8c2d
 Author: dev-sarah <sarah@medusa-store.com>
-Date:   Sat Apr 5 18:20:00 2026 -0600
-    feat: add order cancellation with inventory release
+Date:   Sat Apr 5 14:30:00 2026 -0600
+    hotfix: payment webhook handler timeout handling
 
 commit c4d2f1e
 Author: dev-marcus <marcus@medusa-store.com>
 Date:   Sat Apr 5 15:00:00 2026 -0600
-    fix: improve error handler middleware
+    fix: improve API loader error handling
 
 commit 9a8b3c7
 Author: dev-sarah <sarah@medusa-store.com>
-Date:   Sat Apr 5 14:30:00 2026 -0600
-    hotfix: payment service timeout handling (partial)
+Date:   Sat Apr 5 11:00:00 2026 -0600
+    feat: cart completion race condition guard
 
 commit e5f7d2a
 Author: dev-marcus <marcus@medusa-store.com>
 Date:   Sat Apr 5 11:00:00 2026 -0600
-    feat: add rate limiter middleware
+    feat: draft order creation with region/customer resolution
 
 commit b2c4e8f
 Author: deploy-bot <deploy@medusa-store.com>
 Date:   Fri Apr 4 13:00:00 2026 -0600
-    feat: product listing with category filter
+    feat: product listing with index engine support
 
 commit 1d3a5b7
 Author: dev-sarah <sarah@medusa-store.com>
 Date:   Fri Apr 4 09:15:00 2026 -0600
-    refactor: inventory service with low stock alerts
+    refactor: inventory item CRUD with workflow pattern
 
 commit 8f2e6c9
 Author: dev-marcus <marcus@medusa-store.com>
 Date:   Thu Apr 3 16:45:00 2026 -0600
-    feat: auth service with JWT tokens
+    feat: JWT token generation with RBAC role resolution
 
 commit 4a7d9e1
 Author: deploy-bot <deploy@medusa-store.com>
 Date:   Wed Apr 2 08:30:00 2026 -0600
-    chore: database loader configuration`;
+    chore: database creation command with SSL support`;
 
 export function searchCodeFiles(query: string): CodeFile[] {
   const queryLower = query.toLowerCase();
@@ -481,7 +988,6 @@ export function searchCodeFiles(query: string): CodeFile[] {
     const pathLower = file.path.toLowerCase();
     return keywords.some(kw => contentLower.includes(kw) || pathLower.includes(kw));
   }).sort((a, b) => {
-    // Sort by relevance (number of keyword matches)
     const aScore = keywords.filter(kw => a.content.toLowerCase().includes(kw) || a.path.toLowerCase().includes(kw)).length;
     const bScore = keywords.filter(kw => b.content.toLowerCase().includes(kw) || b.path.toLowerCase().includes(kw)).length;
     return bScore - aScore;

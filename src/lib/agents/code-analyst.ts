@@ -57,7 +57,14 @@ export async function runCodeAnalystAgent(input: CodeAnalysisInput): Promise<Cod
       const concerns: Array<{ file: string; snippet: string; concern: string }> = [];
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
-        if (line.includes('BUG:') || line.includes('WARNING:') || line.includes('TODO:')) {
+        if (
+          line.includes('BUG:') || line.includes('WARNING:') || line.includes('TODO:') ||
+          line.includes('FIXME:') || line.includes('HACK:') || line.includes('XXX:') ||
+          line.includes('NOTE:') || line.includes('@ts-ignore') ||
+          line.match(/catch\s*\{/) || line.match(/catch\s*\(\s*\)\s*\{/) ||
+          line.includes('as any') || line.includes(': any') ||
+          line.includes('process.exit')
+        ) {
           const start = Math.max(0, i - 2);
           const end = Math.min(lines.length, i + 3);
           concerns.push({

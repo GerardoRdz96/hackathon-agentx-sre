@@ -47,6 +47,14 @@ export async function runRouterAgent(input: RouterInput): Promise<RouterResult> 
     const topHypothesis = input.hypothesisResult.hypotheses[0];
     const teamInfo = TEAM_MAP[input.triage.component] || TEAM_MAP.api;
 
+    // Confidence-weighted escalation: if triage confidence is low, auto-escalate
+    let effectiveSeverity = input.triage.severity;
+    let escalationReason: string | null = null;
+    if (input.triage.confidence < 0.5 && !['critical', 'high'].includes(input.triage.severity)) {
+      effectiveSeverity = 'high';
+      escalationReason = `Auto-escalated: triage confidence ${(input.triage.confidence * 100).toFixed(0)}% below threshold (50%)`;
+    }
+
     // Create ticket
     const ticketResult = db.insert(tickets).values({
       incident_id: input.incidentId,
@@ -66,7 +74,7 @@ export async function runRouterAgent(input: RouterInput): Promise<RouterResult> 
     const engineerNotif = {
       type: 'assignment',
       recipient: teamInfo.oncall,
-      message: `[${input.triage.severity.toUpperCase()}] Incident #${input.incidentId} assigned to you. Component: ${input.triage.component}. ${topHypothesis?.description || 'Investigation needed.'}`,
+      message: `[${effectiveSeverity.toUpperCase()}] Incident #${input.incidentId} assigned to you. Component: ${input.triage.component}. ${topHypothesis?.description || 'Investigation needed.'}${escalationReason ? ' (' + escalationReason + ')' : ''}`,
     };
     db.insert(notifications).values({ incident_id: input.incidentId, ...engineerNotif }).run();
     logNotification(input.incidentId, engineerNotif.type, engineerNotif.recipient);
@@ -79,12 +87,12 @@ export async function runRouterAgent(input: RouterInput): Promise<RouterResult> 
       hypothesis: topHypothesis?.description, suggestedFix: topHypothesis?.suggested_fix,
     }).catch(() => {});
 
-    // For critical/high severity, notify team lead (DB + real email + Telegram)
-    if (input.triage.severity === 'critical' || input.triage.severity === 'high') {
+    // For critical/high severity (or auto-escalated), notify team lead (DB + real email + Telegram)
+    if (effectiveSeverity === 'critical' || effectiveSeverity === 'high') {
       const escalationNotif = {
         type: 'escalation',
         recipient: `${teamInfo.team}-lead@medusa-store.com`,
-        message: `[ESCALATION] ${input.triage.severity.toUpperCase()} incident #${input.incidentId} on ${input.triage.component}. Blast radius: ${topHypothesis?.blast_radius || 'unknown'}`,
+        message: `[ESCALATION] ${effectiveSeverity.toUpperCase()} incident #${input.incidentId} on ${input.triage.component}. Blast radius: ${topHypothesis?.blast_radius || 'unknown'}${escalationReason ? '. ' + escalationReason : ''}`,
       };
       db.insert(notifications).values({ incident_id: input.incidentId, ...escalationNotif }).run();
       logNotification(input.incidentId, escalationNotif.type, escalationNotif.recipient);

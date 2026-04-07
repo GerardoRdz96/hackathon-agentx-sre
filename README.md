@@ -53,7 +53,7 @@ INCIDENT IN (text + screenshot)
 | **Real Integrations** | Email notifications via [Resend](https://resend.com) (branded HTML), Telegram alerts via Bot API for critical incidents, Linear-style ticket UI. Graceful degradation if not configured |
 | **Resolution Flow** | Mark incidents resolved from the dashboard — reporter is notified automatically |
 | **Dark Mission Control UI** | 5 agent panels with severity badges, real-time trace timeline, incident history |
-| **Simulated E-Commerce** | 9 Medusa.js source files with realistic bugs + 200+ log entries. Simulated data ensures **reproducible evaluation** — judges can run the full E2E flow without configuring external services. The adapter pattern means swapping to real Datadog/PagerDuty is a config change, not a rewrite |
+| **Real E-Commerce Codebase** | 9 production source files extracted from [Medusa.js](https://github.com/medusajs/medusa) (MIT License) — a real open-source Node.js e-commerce platform. Agents analyze actual payment handlers, auth services, webhook subscribers, inventory routes, and infrastructure loaders with real code patterns and natural code smells. 200+ simulated log entries provide operational context |
 | **Dockerized** | Single `docker compose up` to run the full stack |
 
 ---

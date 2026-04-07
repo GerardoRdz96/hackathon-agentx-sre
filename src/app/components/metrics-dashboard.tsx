@@ -134,6 +134,7 @@ export function MetricsDashboard() {
         <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wider flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
           System Observability
+          <span className="text-[9px] text-gray-600 font-normal normal-case tracking-normal ml-2 hidden sm:inline">Penguin Alley · PA·co Architecture</span>
         </h2>
         <div className="flex items-center gap-2 text-[10px] text-gray-500">
           {stale && <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />}
