@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { IncidentList } from './incident-list';
 import { MissionControl } from './mission-control';
 import type { Incident, Ticket, Trace, Notification } from '@/lib/schema';
@@ -32,15 +32,18 @@ export function IncidentDashboard({ incidents }: { incidents: Incident[] }) {
     }
   }, []);
 
-  // Auto-select first incident on mount, or when new incident appears
+  // Auto-select latest incident when list changes (new incident submitted or page refresh)
+  const prevLengthRef = useRef(incidents.length);
   useEffect(() => {
     if (incidents.length > 0) {
       const latestId = incidents[0].id;
-      // If no selection, or a new incident appeared (list grew), select the latest
-      if (selectedId === null || !incidents.find(i => i.id === selectedId)) {
+      const listGrew = incidents.length > prevLengthRef.current;
+      // Auto-select if: no selection, selected was removed, OR a new incident just appeared
+      if (selectedId === null || !incidents.find(i => i.id === selectedId) || listGrew) {
         setSelectedId(latestId);
         fetchDetails(latestId);
       }
+      prevLengthRef.current = incidents.length;
     } else {
       setSelectedId(null);
       setDetails(null);
