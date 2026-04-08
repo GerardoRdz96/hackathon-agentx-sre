@@ -15,7 +15,7 @@ Site Reliability Engineering teams at e-commerce companies face a critical bottl
 
 ## The Solution
 
-A **5-agent Claude pipeline** that ingests an incident report (text + optional screenshot), analyzes logs and source code, generates ranked hypotheses, and routes a ticket to the correct team — all in **6-8 seconds**. Each agent is purpose-built with the right model for its task.
+A **5-agent Claude pipeline** that ingests an incident report (text + optional screenshot), analyzes logs and source code, generates ranked hypotheses, and routes a ticket to the correct team — all in **~20-28 seconds**. Each agent is purpose-built with the right model for its task.
 
 ---
 
@@ -75,7 +75,8 @@ We use **two Claude models** selected for the right tradeoff between speed, cost
 
 | Model | Used By | Latency | Cost (Input) | Justification |
 |---|---|---|---|---|
-| **Claude Haiku** | Triage Agent, Router Agent | ~1s | $0.25/MTok | Classification and routing are **structured, low-ambiguity tasks**. Haiku delivers sub-second responses with high accuracy for severity/component classification. Cost-efficient for high-volume triage. |
+| **Claude Haiku** | Triage Agent | ~1s | $0.25/MTok | Classification is a **structured, low-ambiguity task**. Haiku delivers sub-second responses with high accuracy for severity/component classification. Cost-efficient for high-volume triage. |
+| **Deterministic** | Router Agent | ~2ms | $0 | Routing is rule-based (component → team mapping). No LLM needed — faster and cheaper than any model call. |
 | **Claude Sonnet** | Log Analyst, Code Analyst, Hypothesis Engine | ~2-3s | $3/MTok | Log pattern matching across 200+ entries, source code analysis across 9 files, and multi-step hypothesis generation all require **deeper reasoning and longer context windows**. Sonnet's stronger code understanding produces higher-quality root cause analysis. |
 | **Claude Sonnet (Vision)** | Triage Agent (when screenshot attached) | ~2s | $3/MTok | Screenshots of Grafana dashboards or error pages are sent as base64 images. Vision extracts error patterns, status codes, and anomalies that text descriptions miss. |
 
@@ -163,7 +164,7 @@ hackathon-agentx-sre/
 
 A user submits an incident through the dashboard form: a title, description, optional reporter email, and optional screenshot (e.g., a Grafana panel showing a spike in 500 errors). Input passes through **guardrails** before reaching any agent:
 
-- Canary string detection (11 known prompt injection phrases)
+- Canary string detection (10 known prompt injection phrases)
 - Regex-based prompt injection pattern filtering (template injections, instruction tags)
 - HTML/script tag stripping
 - Null byte removal
@@ -180,7 +181,7 @@ Running concurrently via `Promise.allSettled()`:
 - **Log Analyst** searches 200+ simulated log entries filtered by the triaged component, identifies error patterns, timestamps, and anomalies
 - **Code Analyst** scans 9 Medusa.js source files for bugs matching the incident pattern — race conditions, missing null checks, incorrect error handling
 
-### 4. Hypothesis Engine (Sonnet, ~2s)
+### 4. Hypothesis Engine (Sonnet, ~9s)
 
 Synthesizes triage classification, log findings, and code findings into **ranked hypotheses** with confidence scores, affected files, and suggested fixes. Each hypothesis is actionable — not just "something is wrong" but "the payment webhook handler at line 42 has a race condition causing double charges."
 
@@ -213,7 +214,7 @@ This system is designed with responsible AI principles embedded at every layer:
 
 | Metric | Value |
 |---|---|
-| Pipeline end-to-end | **6-8 seconds** |
+| Pipeline end-to-end | **~20-28 seconds** |
 | Manual MTTR baseline | **47 minutes** |
 | Time reduction | **91%** |
 | Agents in pipeline | **5** |

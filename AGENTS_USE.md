@@ -9,7 +9,7 @@
 | Field | Value |
 |---|---|
 | **System Name** | Incidex |
-| **Purpose** | AI-powered SRE incident triage — 5 specialized agents reduce Mean Time to Resolution from 47 minutes to 6–8 seconds (91% faster) |
+| **Purpose** | AI-powered SRE incident triage — 5 specialized agents reduce Mean Time to Resolution from 47 minutes to ~20-28 seconds (99% faster) |
 | **Tech Stack** | Next.js 15, TypeScript, Tailwind CSS 4, Anthropic Claude API (`@anthropic-ai/sdk`), SQLite + Drizzle ORM, Docker |
 | **LLM Provider** | Anthropic Claude — Haiku 4.5 (triage) + Sonnet 4 (analysis, hypothesis, vision). Router is deterministic (no LLM). |
 | **Integrations** | Resend (branded HTML email), Telegram Bot API (critical alerts), SQLite (Linear-style ticketing) |
@@ -180,7 +180,7 @@ Each agent receives precisely the context it needs — no more, no less:
 ### Context Management Techniques
 
 - **Component-based filtering:** Logs and code files are pre-filtered by the triaged component before sending to Claude, reducing noise by ~80%.
-- **Output truncation:** `enforceOutputLength()` caps agent outputs (5,000 chars default, 3,000 for hypothesis) to prevent context window overflow in downstream agents.
+- **Output truncation:** `enforceOutputLength()` caps agent outputs (5,000 chars default, 8,000 for hypothesis) to prevent context window overflow in downstream agents.
 - **Structured JSON output:** All agents return typed JSON via structured prompts, not free text. This ensures downstream agents parse context reliably without additional extraction.
 - **Parallel isolation:** Log Analyst and Code Analyst share triage context but do NOT share results with each other — only Hypothesis Engine sees both, preventing circular reasoning.
 - **Cascading enrichment:** Each pipeline stage adds context. Triage adds classification → Analysts add evidence → Hypothesis adds synthesis → Router adds routing decision. Context grows in a controlled, additive manner.
@@ -296,7 +296,7 @@ Implemented in `src/lib/guardrails.ts`. Every Claude API call passes through `va
 | `detectCanaryStrings(input)` | Checks for 10 known prompt injection phrases (case-insensitive) |
 | `sanitizeInput(input)` | Strips HTML tags, `<script>` blocks, null bytes, injection patterns |
 | `validateMaxLength(input)` | Rejects inputs longer than 10,000 characters |
-| `enforceOutputLength(output, max)` | Truncates at 5,000 chars (3,000 for hypothesis) + appends `[TRUNCATED]` |
+| `enforceOutputLength(output, max)` | Truncates at 5,000 chars (8,000 for hypothesis) + appends `[TRUNCATED]` |
 | `validateAndSanitize(input)` | Orchestrates all checks, returns sanitized string + warnings |
 
 ### Canary Strings (10 patterns)
@@ -413,7 +413,7 @@ Defense: System prompt instructs "never speculate without evidence" + text evide
 ### What Worked
 
 - **Model tiering (Haiku + Sonnet)** was the single best architectural decision. Haiku handles classification in <1s at 12x lower cost. Using Sonnet everywhere would have tripled latency and cost without meaningful quality improvement for triage/routing.
-- **Parallel execution (Promise.allSettled)** cut 6–8 seconds off pipeline time. Fault tolerance means one analyst failing doesn't crash the pipeline — the other still contributes to hypothesis generation.
+- **Parallel execution (Promise.allSettled)** cut ~8 seconds off pipeline time by running analysts simultaneously. Fault tolerance means one analyst failing doesn't crash the pipeline — the other still contributes to hypothesis generation.
 - **Real integrations (Resend + Telegram)** differentiate from mocked solutions. The branded HTML emails and severity-based Telegram routing demonstrate production readiness beyond the hackathon scope.
 - **Simulated e-commerce data** ensured reproducible evaluation. Any reviewer can run the full E2E flow without configuring Medusa.js, Stripe, or external services. The adapter pattern (component-based log/code filtering) means swapping to a real codebase is a configuration change, not a rewrite.
 
