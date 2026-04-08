@@ -216,7 +216,7 @@ This system is designed with responsible AI principles embedded at every layer:
 |---|---|
 | Pipeline end-to-end | **~20-28 seconds** |
 | Manual MTTR baseline | **47 minutes** |
-| Time reduction | **91%** |
+| Time reduction | **99%** |
 | Agents in pipeline | **5** |
 | Parallel agent pairs | **1** (Log + Code Analyst) |
 | Simulated source files | **9** |
